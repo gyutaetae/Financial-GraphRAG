@@ -1,0 +1,70 @@
+# 환경 변수 파일 (API 키 등 민감한 정보가 들어있어요!)
+.env
+.env.local
+.env.*.local
+
+# 가상환경 폴더는 커밋하지 않아요 (너무 크고 불필요해요!)
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python 관련
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE 관련
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# 그래프 저장소는 커밋하지 않아요 (너무 크고 생성되는 파일이에요!)
+graph_storage/
+graph_storage_api/
+graph_storage_hybrid/
+graph_storage_hybrid_backup/
+my_graph_data/
+src/my_graph_data/
+
+# 그래프 시각화 파일 (생성되는 파일이에요!)
+graph_ui.html
+graph_visualization.html
+
+# 데이터 소스 기록 파일 (사용자마다 다를 수 있어요!)
+data_sources.json
+
+# 업로드된 임시 파일
+src/_uploaded_temp.pdf
+temp_*.pdf
+*.pdf.tmp
+
+# 가상환경
+.venv/
+
+# 로그 파일
+logs/
+*.log
+
+# Cursor IDE
+.cursor/
+.cursorignore
+
+# 테스트 파일
+test_graph.html
+graph_visualization*.html
+
+# 스토리지
+storage/
+
+# 디버그 로그
+.cursor/debug.log

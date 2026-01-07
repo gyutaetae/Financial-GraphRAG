@@ -1,0 +1,382 @@
+"""
+유틸리티 함수 모음
+공통으로 사용되는 함수들을 모아놓은 파일이에요!
+"""
+
+import os
+import re
+from typing import List, Optional, Dict, Any
+from openai import AsyncOpenAI
+from ollama import AsyncClient
+
+# config에서 설정 가져오기
+from config import (
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    API_MODELS,
+    LOCAL_MODELS,
+)
+
+
+# --- [1] OpenAI API 함수들 ---
+
+async def openai_model_if(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    history_messages: List[Dict[str, str]] = [],
+    **kwargs
+) -> str:
+    """
+    OpenAI API를 사용해서 LLM에 질문하는 함수예요!
+    
+    Args:
+        prompt: 질문 내용
+        system_prompt: 시스템 메시지 (선택사항)
+        history_messages: 이전 대화 내용
+        **kwargs: 추가 인자
+        
+    Returns:
+        LLM 응답 텍스트
+    """
+    # #region agent log
+    import json
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"utils.py:42","message":"OpenAI LLM call","data":{"prompt_len":len(prompt),"prompt_preview":prompt[:200],"system_prompt":system_prompt[:200] if system_prompt else None,"kwargs":str(kwargs)},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H3,H4"})+'\n')
+    # #endregion
+    
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.extend(history_messages)
+    messages.append({"role": "user", "content": prompt})
+    
+    response = await client.chat.completions.create(
+        model=API_MODELS["llm"],
+        messages=messages,
+        temperature=0.0,  # 0.1 -> 0.0 (더 빠른 응답)
+        max_tokens=2000,  # 500 -> 2000 (JSON 파싱 에러 방지)
+    )
+    
+    result = response.choices[0].message.content
+    
+    # #region agent log
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"utils.py:75","message":"OpenAI LLM response","data":{"response_len":len(result) if result else 0,"response_preview":result[:500] if result else None},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H4"})+'\n')
+    # #endregion
+    
+    return result
+
+
+async def openai_embedding_if(texts: List[str]) -> List[List[float]]:
+    """
+    OpenAI API를 사용해서 텍스트를 벡터로 변환하는 함수예요!
+    
+    Args:
+        texts: 변환할 텍스트 리스트
+        
+    Returns:
+        벡터 리스트 (각 텍스트마다 하나의 벡터)
+    """
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    
+    response = await client.embeddings.create(
+        model=API_MODELS["embedding"],
+        input=texts
+    )
+    
+    return [item.embedding for item in response.data]
+
+# nano-graphrag가 요구하는 embedding_dim 속성 추가
+openai_embedding_if.embedding_dim = 1536
+
+
+# --- [2] Ollama 함수들 ---
+
+async def ollama_model_if(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    history_messages: List[Dict[str, str]] = [],
+    **kwargs
+) -> str:
+    """
+    Ollama를 사용해서 LLM에 질문하는 함수예요!
+    
+    Args:
+        prompt: 질문 내용
+        system_prompt: 시스템 메시지 (선택사항)
+        history_messages: 이전 대화 내용
+        **kwargs: 추가 인자
+        
+    Returns:
+        LLM 응답 텍스트
+    """
+    # #region agent log
+    import json
+    import re
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"utils.py:115","message":"Ollama LLM call","data":{"prompt_len":len(prompt),"prompt_preview":prompt[:200],"system_prompt":system_prompt[:200] if system_prompt else None,"kwargs":str(kwargs)},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H3,H5"})+'\n')
+    # #endregion
+    
+    client = AsyncClient()
+    
+    # Detect if this is a JSON-expecting call (GraphRAG internal operations)
+    is_json_request = (
+        "json" in prompt.lower() or 
+        "```json" in prompt.lower() or
+        (system_prompt and "json" in system_prompt.lower())
+    )
+    
+    messages = []
+    if system_prompt:
+        # Enhance system prompt for JSON requests
+        if is_json_request:
+            enhanced_system = system_prompt + "\n\nIMPORTANT: You MUST respond with valid JSON only. Do not include any explanatory text, markdown formatting, or conversational responses. Output only the raw JSON object."
+            messages.append({"role": "system", "content": enhanced_system})
+        else:
+            messages.append({"role": "system", "content": system_prompt})
+    elif is_json_request:
+        # Add JSON enforcement if no system prompt exists
+        messages.append({"role": "system", "content": "You are a precise JSON generator. Respond only with valid JSON. No explanations, no markdown, no conversational text."})
+    
+    messages.extend(history_messages)
+    messages.append({"role": "user", "content": prompt})
+    
+    response = await client.chat(
+        model=LOCAL_MODELS["llm"],
+        messages=messages,
+        format="json" if is_json_request else None  # Force JSON mode for Ollama
+    )
+    
+    result = response['message']['content']
+    
+    # #region agent log
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"utils.py:165","message":"Ollama LLM response (raw)","data":{"response_len":len(result) if result else 0,"response_preview":result[:500] if result else None,"is_json_request":is_json_request},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H5"})+'\n')
+    # #endregion
+    
+    # If JSON was expected, try to extract it from conversational responses
+    if is_json_request and result:
+        # Try to extract JSON from markdown code blocks
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', result, re.DOTALL)
+        if json_match:
+            result = json_match.group(1)
+        # Try to find JSON object in the response
+        elif not result.strip().startswith('{'):
+            json_obj_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_obj_match:
+                result = json_obj_match.group(0)
+    
+    # #region agent log
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"utils.py:185","message":"Ollama LLM response (processed)","data":{"response_len":len(result) if result else 0,"response_preview":result[:500] if result else None},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H4"})+'\n')
+    # #endregion
+    
+    return result
+
+
+async def ollama_embedding_if(texts: List[str]) -> List[List[float]]:
+    """
+    Ollama를 사용해서 텍스트를 벡터로 변환하는 함수예요!
+    
+    Args:
+        texts: 변환할 텍스트 리스트
+        
+    Returns:
+        벡터 리스트 (각 텍스트마다 하나의 벡터)
+    """
+    client = AsyncClient()
+    
+    embeds = []
+    for text in texts:
+        response = await client.embeddings(
+            model=LOCAL_MODELS["embedding"],
+            prompt=text
+        )
+        embeds.append(response['embedding'])
+    
+    return embeds
+
+
+# Ollama embedding 차원 설정
+ollama_embedding_if.embedding_dim = LOCAL_MODELS["embedding_dim"]
+
+
+# --- [3] 텍스트 전처리 함수들 ---
+
+def preprocess_text(text: str) -> str:
+    """
+    텍스트를 전처리하는 함수예요!
+    - 불용어 제거
+    - 한 글자 단어 제거
+    - 금융 숫자 보존
+    
+    Args:
+        text: 원본 텍스트
+        
+    Returns:
+        전처리된 텍스트
+    """
+    # 한국어 불용어 리스트
+    stopwords = {
+        "이", "가", "을", "를", "에", "의", "와", "과", "도", "로", "으로",
+        "은", "는", "에서", "에게", "께", "한테", "에게서", "한테서",
+        "처럼", "같이", "만큼", "만", "부터", "까지", "조차", "마저",
+        "밖에", "뿐", "따라", "따름", "마다", "대로", "커녕",
+        "그", "그것", "저", "저것", "이것", "그런", "저런", "이런",
+        "그래서", "그러나", "그런데", "그러므로", "그리고", "그리하여",
+        "또", "또한", "또는", "또한", "또한", "또한",
+        "하지만", "그러나", "그런데", "그렇지만", "그러면", "그래서",
+        "그리고", "그리하여", "그러므로", "그런즉", "그런즉",
+        "그러므로", "그러니까", "그러니", "그러면", "그래서",
+    }
+    
+    # 영어 불용어 리스트
+    english_stopwords = {
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "as", "is", "are", "was", "were", "be",
+        "been", "being", "have", "has", "had", "do", "does", "did", "will",
+        "would", "should", "could", "may", "might", "must", "can", "this",
+        "that", "these", "those", "it", "its", "itself", "they", "them",
+        "their", "theirs", "themselves", "what", "which", "who", "whom",
+        "whose", "where", "when", "why", "how", "all", "each", "every",
+        "both", "few", "more", "most", "other", "some", "such", "no",
+        "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+    }
+    
+    # 모든 불용어 합치기
+    all_stopwords = stopwords | english_stopwords
+    
+    # 텍스트를 단어로 분리
+    words = text.split()
+    
+    # 불용어 제거 및 한 글자 단어 제거
+    filtered_words = []
+    for word in words:
+        # 단어 정리 (구두점 제거)
+        cleaned_word = re.sub(r'[^\w\s$%]', '', word)
+        
+        # 한 글자 단어 제거 (단, 숫자나 특수문자는 보존)
+        if len(cleaned_word) <= 1 and not cleaned_word.isdigit():
+            continue
+        
+        # 불용어 제거
+        if cleaned_word.lower() in all_stopwords:
+            continue
+        
+        # 금융 숫자 패턴 보존 ($57.0B, 23.5% 등)
+        if re.match(r'^[\$€£¥]?\d+[.,]?\d*[BMKkmb%]?$', cleaned_word):
+            filtered_words.append(word)
+            continue
+        
+        # 나머지 단어 추가
+        if cleaned_word:
+            filtered_words.append(word)
+    
+    # 단어들을 다시 문장으로 합치기
+    processed_text = " ".join(filtered_words)
+    
+    return processed_text
+
+
+def chunk_text(text: str, max_tokens: int = 1200) -> List[str]:
+    """
+    텍스트를 토큰 단위로 청크로 나누는 함수예요!
+    
+    Args:
+        text: 원본 텍스트
+        max_tokens: 최대 토큰 수 (기본값: 1200)
+        
+    Returns:
+        청크 리스트
+    """
+    chunks: List[str] = []
+    
+    # tiktoken 사용 가능 여부 확인
+    try:
+        import tiktoken
+        encoding = tiktoken.encoding_for_model(API_MODELS["llm"])
+        tokens = encoding.encode(text)
+        
+        for i in range(0, len(tokens), max_tokens):
+            token_chunk = tokens[i : i + max_tokens]
+            chunks.append(encoding.decode(token_chunk))
+    except Exception:
+        # tiktoken이 없으면 문자 기준으로 청크 분할 (대략 4글자 = 1토큰 가정)
+        approx_chars = max_tokens * 4
+        for i in range(0, len(text), approx_chars):
+            chunks.append(text[i : i + approx_chars])
+    
+    return chunks
+
+
+# --- [4] PDF 파싱 함수들 ---
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    """
+    PDF 파일에서 텍스트를 추출하는 함수예요!
+    
+    Args:
+        pdf_path: PDF 파일 경로
+        
+    Returns:
+        추출된 텍스트
+    """
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"PDF 파일을 찾을 수 없어요: '{pdf_path}'")
+    
+    # PyMuPDF 사용 시도
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(pdf_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except ImportError:
+        raise ImportError("PyMuPDF가 설치되지 않았어요! 'pip install pymupdf'로 설치해주세요.")
+
+
+# --- [5] 금융 엔티티 프롬프트 ---
+
+def get_financial_entity_prompt() -> str:
+    """
+    금융 엔티티 추출을 위한 프롬프트를 반환하는 함수예요!
+    
+    Returns:
+        프롬프트 텍스트
+    """
+    return """You are a financial analyst extracting entities from financial documents.
+
+Focus on extracting the following financial entities with HIGH PRIORITY:
+- REVENUE (매출, Revenue, Sales, Total Revenue)
+- OPERATING_INCOME (영업이익, Operating Income, Operating Profit)
+- NET_INCOME (순이익, Net Income, Profit)
+- GROWTH_RATE (성장률, Growth Rate, YoY Growth, QoQ Growth)
+- MARGIN (마진, Gross Margin, Operating Margin, Net Margin)
+- ASSET (자산, Total Assets, Current Assets)
+- LIABILITY (부채, Total Liabilities, Current Liabilities)
+- EQUITY (자본, Shareholders' Equity, Equity)
+- CASH_FLOW (현금흐름, Operating Cash Flow, Free Cash Flow)
+- EPS (주당순이익, Earnings Per Share, EPS)
+- PE_RATIO (주가수익비율, P/E Ratio, Price-to-Earnings)
+- MARKET_CAP (시가총액, Market Capitalization, Market Cap)
+
+Also extract standard entities:
+- ORGANIZATION (회사명, 기관명)
+- PERSON (인물명, 임원명)
+- GEO (지역, 국가, 도시)
+- DATE (날짜, 분기, 연도)
+- TECHNOLOGY (기술명, 제품명)
+
+For each entity, extract:
+1. The exact name/value
+2. The entity type
+3. The context (where it appears in the document)
+4. Relationships to other entities (e.g., "NVIDIA's revenue is $57.0B")
+
+Be precise with financial numbers. Extract exact values with units (e.g., "$57.0 billion", "23.5%", "Q3 2026").
+"""
+
