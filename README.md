@@ -35,18 +35,26 @@ streamlit run src/streamlit_app.py
 
 ### Docker Compose (프로덕션)
 
+**📖 상세 가이드:** [DOCKER_SETUP.md](./DOCKER_SETUP.md) 참조
+
 ```bash
-# 환경 변수 설정
-export OPENAI_API_KEY=your_key_here
-export NEO4J_PASSWORD=your_password_here
+# 1. .env 파일 생성
+cp .env.example .env
+# .env 파일 편집하여 API 키 및 비밀번호 설정
 
-# 서비스 시작
-docker-compose up -d
+# 2. Docker 이미지 빌드 및 서비스 시작
+docker-compose up --build -d
 
-# 접속
+# 3. 서비스 상태 확인
+docker-compose ps
+
+# 4. 접속
 # - Streamlit: http://localhost:8501
 # - FastAPI: http://localhost:8000
-# - Neo4j: http://localhost:7474
+# - Neo4j Browser: http://localhost:7474
+
+# 5. 로그 확인
+docker-compose logs -f
 ```
 
 ### Streamlit Cloud 배포
