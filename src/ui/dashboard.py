@@ -124,12 +124,12 @@ with col1:
 with col2:
     # Graph stats
     if server_connected:
-    try:
+        try:
             response = requests.get(f"{API_BASE_URL}/graph_stats", timeout=5)
-        if response.status_code == 200:
-            stats = response.json()
+            if response.status_code == 200:
+                stats = response.json()
                 st.metric("Nodes", f"{stats.get('nodes', 0):,}", label_visibility="visible")
-    except:
+        except:
             st.metric("Nodes", "N/A")
     else:
         st.metric("Nodes", "N/A")
