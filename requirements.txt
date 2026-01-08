@@ -5,7 +5,7 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 
 # GraphRAG
-nano-graphrag>=0.1.0
+nano-graphrag>=0.0.8.2
 
 # Database
 neo4j>=5.14.0
