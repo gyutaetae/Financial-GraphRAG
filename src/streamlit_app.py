@@ -22,6 +22,14 @@ except:
 # 현재 파일의 폴더 경로를 추가해요!
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Streamlit Cloud용 직접 엔진 임포트
+try:
+    from engine import HybridGraphRAGEngine
+    DIRECT_ENGINE_AVAILABLE = True
+except ImportError:
+    DIRECT_ENGINE_AVAILABLE = False
+    HybridGraphRAGEngine = None
+
 # 페이지 설정 - Executive Dashboard
 st.set_page_config(
     page_title="VIK AI: Executive Intelligence",
@@ -469,11 +477,43 @@ def delete_data_source(source_type, index):
     return False
 
 # API 엔드포인트
-API_BASE_URL = "http://127.0.0.1:8000"
+# Streamlit Cloud에서는 STREAMLIT_SHARING_MODE 환경 변수가 자동으로 설정됨
+# 로컬에서는 127.0.0.1:8000, Cloud에서는 API 서버 비활성화
+import socket
+
+def is_streamlit_cloud():
+    """Streamlit Cloud 환경 감지"""
+    return os.getenv("STREAMLIT_SHARING_MODE") is not None or os.getenv("HOSTNAME", "").startswith("streamlit-")
+
+if is_streamlit_cloud():
+    # Streamlit Cloud: API 서버 없이 직접 엔진 사용
+    API_BASE_URL = None
+    USE_DIRECT_ENGINE = True
+else:
+    # 로컬: FastAPI 서버 사용
+    API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+    USE_DIRECT_ENGINE = False
+
+# 전역 엔진 인스턴스 (Streamlit Cloud용)
+_direct_engine = None
+
+def get_direct_engine():
+    """Streamlit Cloud에서 직접 엔진 가져오기"""
+    global _direct_engine
+    if _direct_engine is None and DIRECT_ENGINE_AVAILABLE:
+        _direct_engine = HybridGraphRAGEngine(
+            working_dir="./graph_storage_hybrid",
+            enable_local=False,  # Streamlit Cloud에서는 Ollama 없음
+            enable_neo4j=False   # Streamlit Cloud에서는 Neo4j 없음
+        )
+    return _direct_engine
 
 # 캐시: 백엔드 상태/질의 (규칙: st.cache_data로 무거운 호출 캐싱)
 @st.cache_data(ttl=30, show_spinner=False)
 def cached_health(api_base_url: str) -> bool:
+    if USE_DIRECT_ENGINE:
+        # Streamlit Cloud: 직접 엔진 사용 가능 여부 확인
+        return DIRECT_ENGINE_AVAILABLE
     try:
         r = requests.get(f"{api_base_url}/health", timeout=5)
         return r.status_code == 200
@@ -484,6 +524,39 @@ def cached_health(api_base_url: str) -> bool:
 @st.cache_data(ttl=120, show_spinner=False)
 def cached_query(api_base_url: str, payload_json: str) -> Dict:
     payload = json.loads(payload_json)
+    
+    if USE_DIRECT_ENGINE:
+        # Streamlit Cloud: 직접 엔진 사용
+        engine = get_direct_engine()
+        if engine is None:
+            return {"_error": "GraphRAG 엔진을 초기화할 수 없습니다."}
+        
+        try:
+            import asyncio
+            question = payload.get("question", "")
+            search_type = payload.get("search_type", "local")
+            
+            # 비동기 함수를 동기적으로 실행
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            if search_type == "global":
+                response = loop.run_until_complete(engine.aglobal_search(question))
+            else:
+                response = loop.run_until_complete(engine.aquery(question))
+            
+            loop.close()
+            
+            return {
+                "response": response,
+                "sources": [],
+                "confidence": 1.0,
+                "search_mode": "DIRECT_ENGINE"
+            }
+        except Exception as e:
+            return {"_error": f"엔진 실행 오류: {str(e)}"}
+    
+    # 로컬: FastAPI 서버 사용
     r = requests.post(f"{api_base_url}/query", json=payload, timeout=120)
     if r.status_code == 200:
         return r.json()
@@ -807,25 +880,52 @@ with tab2:
                                 st.error("PDF에서 텍스트를 추출할 수 없습니다. OCR이 필요한 이미지 기반 PDF일 수 있습니다.")
                             else:
                                 # 인덱싱 요청
-                                response = requests.post(
-                                    f"{API_BASE_URL}/insert",
-                                    json={"text": extracted_text},
-                                    timeout=300
-                                )
-                                
-                                if response.status_code == 200:
-                                    # 데이터 소스 저장
-                                    data_sources = load_data_sources()
-                                    data_sources["pdf"].append({
-                                        "filename": uploaded_file.name,
-                                        "size": uploaded_file.size,
-                                        "indexed_at": time.strftime("%Y-%m-%d %H:%M:%S")
-                                    })
-                                    save_data_sources(data_sources)
-                                    
-                                    st.success(f"✅ {uploaded_file.name} successfully indexed!")
+                                if USE_DIRECT_ENGINE:
+                                    # Streamlit Cloud: 직접 엔진 사용
+                                    engine = get_direct_engine()
+                                    if engine is None:
+                                        st.error("GraphRAG 엔진을 초기화할 수 없습니다.")
+                                    else:
+                                        try:
+                                            import asyncio
+                                            loop = asyncio.new_event_loop()
+                                            asyncio.set_event_loop(loop)
+                                            loop.run_until_complete(engine.ainsert(extracted_text))
+                                            loop.close()
+                                            
+                                            # 데이터 소스 저장
+                                            data_sources = load_data_sources()
+                                            data_sources["pdf"].append({
+                                                "filename": uploaded_file.name,
+                                                "size": uploaded_file.size,
+                                                "indexed_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                                            })
+                                            save_data_sources(data_sources)
+                                            
+                                            st.success(f"✅ {uploaded_file.name} successfully indexed!")
+                                        except Exception as e:
+                                            st.error(f"인덱싱 실패: {str(e)}")
                                 else:
-                                    st.error(f"Indexing failed: {response.status_code} - {response.text}")
+                                    # 로컬: FastAPI 서버 사용
+                                    response = requests.post(
+                                        f"{API_BASE_URL}/insert",
+                                        json={"text": extracted_text},
+                                        timeout=300
+                                    )
+                                    
+                                    if response.status_code == 200:
+                                        # 데이터 소스 저장
+                                        data_sources = load_data_sources()
+                                        data_sources["pdf"].append({
+                                            "filename": uploaded_file.name,
+                                            "size": uploaded_file.size,
+                                            "indexed_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                                        })
+                                        save_data_sources(data_sources)
+                                        
+                                        st.success(f"✅ {uploaded_file.name} successfully indexed!")
+                                    else:
+                                        st.error(f"Indexing failed: {response.status_code} - {response.text}")
                         except Exception as e:
                             st.error(f"Error processing PDF: {str(e)}")
     
