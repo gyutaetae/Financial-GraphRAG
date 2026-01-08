@@ -57,13 +57,20 @@ docker-compose ps
 docker-compose logs -f
 ```
 
-### Streamlit Cloud 배포
+### Streamlit Cloud 배포 (웹 공개, 추천!)
 
-**Secrets 설정** (Settings → Secrets):
-```toml
-OPENAI_API_KEY = "your_key_here"
-OPENAI_BASE_URL = "https://api.openai.com/v1"
-```
+**📖 상세 가이드:** [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) 참조
+
+**빠른 배포:**
+1. https://share.streamlit.io/ 접속
+2. GitHub 저장소 연결: `gyutaetae/Financial-GraphRAG`
+3. Main file: `src/streamlit_app.py`
+4. Secrets 설정 (Settings → Secrets):
+   ```toml
+   OPENAI_API_KEY = "your_key_here"
+   OPENAI_BASE_URL = "https://api.openai.com/v1"
+   ```
+5. Deploy! → 완료! 누구나 접속 가능한 URL 생성
 
 **자동으로 직접 엔진 모드로 작동** (FastAPI 서버 불필요)
 
