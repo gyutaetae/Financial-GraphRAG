@@ -408,23 +408,23 @@ AVAILABLE SOURCES:
 
 REPORT STRUCTURE (MANDATORY):
 
-## 📊 EXECUTIVE SUMMARY
+## EXECUTIVE SUMMARY
 Provide a concise 2-3 sentence overview of the key findings. This should be immediately actionable for decision-makers.
 
-## 🔍 KEY FINDINGS
+## KEY FINDINGS
 Present 3-5 bullet points highlighting the most critical insights. Each finding MUST include citation [1], [2], etc.
 - Finding 1 with supporting data [1]
 - Finding 2 with evidence [2]
 - Continue with [3], [4] as needed
 
-## 📈 DETAILED ANALYSIS  
+## DETAILED ANALYSIS  
 Provide in-depth analysis with clear sections:
 - Break down complex information into digestible parts
 - Support every factual claim with citations [1], [2], [3]
 - Use quantitative data where available
 - Explain implications and context
 
-## 💡 CONCLUSION & RECOMMENDATIONS
+## CONCLUSION & RECOMMENDATIONS
 Summarize the analysis and provide actionable recommendations:
 - Key takeaways
 - Strategic implications  
@@ -481,19 +481,19 @@ WEB SEARCH RESULTS:
 
 REPORT STRUCTURE (MANDATORY):
 
-## 📊 EXECUTIVE SUMMARY
+## EXECUTIVE SUMMARY
 Synthesize the web findings into 2-3 actionable sentences.
 
-## 🔍 KEY FINDINGS
+## KEY FINDINGS
 Present 3-5 bullet points from the search results. Cite sources [1], [2], etc.
 
-## 📈 DETAILED ANALYSIS
+## DETAILED ANALYSIS
 Synthesize information from multiple sources:
 - Compare and contrast different perspectives
 - Identify trends and patterns
 - Cite sources for every claim [1][2][3]
 
-## 💡 CONCLUSION & RECOMMENDATIONS
+## CONCLUSION & RECOMMENDATIONS
 Based on the web research, provide strategic insights.
 
 CITATION RULES:

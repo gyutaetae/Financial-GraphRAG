@@ -281,7 +281,8 @@ class HybridGraphRAGEngine:
     
     async def _extract_sources(self) -> list[dict]:
         """
-        text_chunks KV store와 GraphML에서 출처 정보 추출
+        text_chunks KV store에서 출처 정보 추출
+        실제로 사용 가능한 청크만 반환 (최대 10개)
         
         Returns:
             List of source dicts with id, file, chunk_id, excerpt
@@ -295,18 +296,36 @@ class HybridGraphRAGEngine:
             print("[DEBUG] text_chunks 파일이 없어요")
             return sources
         
+        # data_sources.json에서 파일명 가져오기
+        data_sources_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data_sources.json")
+        pdf_files = []
+        if os.path.exists(data_sources_file):
+            try:
+                with open(data_sources_file, 'r', encoding='utf-8') as f:
+                    data_sources = json.load(f)
+                    pdf_files = [pdf.get('name', 'uploaded_document.pdf') for pdf in data_sources.get('pdfs', [])]
+            except:
+                pass
+        
         try:
             with open(text_chunks_path, 'r', encoding='utf-8') as f:
                 chunks_data = json.load(f)
             
-            # 최대 5개의 청크를 소스로 반환 (가장 최근에 추가된 것부터)
-            chunk_items = list(chunks_data.items())[:5]
+            # 실제 사용 가능한 청크만 반환 (최대 10개)
+            chunk_items = list(chunks_data.items())[:10]
             
             for idx, (chunk_id, chunk_info) in enumerate(chunk_items, 1):
                 excerpt = chunk_info.get('content', '')[:300]  # 처음 300자만
+                
+                # 파일명 결정: data_sources에서 가져오거나 기본값 사용
+                file_name = "uploaded_document.pdf"
+                if pdf_files:
+                    # 여러 파일이 있으면 첫 번째 파일 사용 (또는 청크 ID 기반으로 매핑)
+                    file_name = pdf_files[0] if len(pdf_files) == 1 else pdf_files[idx % len(pdf_files)]
+                
                 sources.append({
                     "id": idx,
-                    "file": "uploaded_document.pdf",  # 파일명은 나중에 메타데이터에서 추출
+                    "file": file_name,
                     "chunk_id": chunk_id,
                     "excerpt": excerpt,
                     "tokens": chunk_info.get('tokens', 0)

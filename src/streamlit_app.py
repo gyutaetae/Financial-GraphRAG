@@ -70,12 +70,72 @@ st.markdown("""
     cursor: help;
     text-decoration: none;
     transition: all 0.2s;
+    position: relative;
 }
 
 .citation:hover {
     background: #0066cc;
     color: white;
     transform: translateY(-1px);
+}
+
+/* Citation Tooltip */
+.citation-tooltip {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #1a1a1a;
+    color: #fff;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    width: 350px;
+    max-width: 90vw;
+    font-size: 0.875rem;
+    font-weight: normal;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: opacity 0.2s, visibility 0.2s;
+    pointer-events: none;
+}
+
+.citation-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1a1a1a;
+}
+
+.citation:hover .citation-tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+.citation-tooltip-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #fff;
+    border-bottom: 1px solid #444;
+    padding-bottom: 0.5rem;
+}
+
+.citation-tooltip-content {
+    color: #e0e0e0;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.citation-tooltip-chunk {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 0.5rem;
 }
 
 /* References 섹션 */
@@ -226,9 +286,24 @@ def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
             # 해당 번호의 소스 찾기
             source = next((s for s in sources if s['id'] == num), None)
             if source:
-                title = f"{source.get('file', 'Unknown source')}"
+                file_name = source.get('file', 'Unknown source')
+                chunk_id = source.get('chunk_id', 'N/A')
+                excerpt = source.get('excerpt', '')
+                # HTML 특수문자 이스케이프
+                import html
+                file_name_escaped = html.escape(file_name)
+                excerpt_escaped = html.escape(excerpt[:200] + ('...' if len(excerpt) > 200 else ''))
+                chunk_id_escaped = html.escape(str(chunk_id))
+                
+                tooltip_html = f"""
+                <div class="citation-tooltip">
+                    <div class="citation-tooltip-title">{file_name_escaped}</div>
+                    <div class="citation-tooltip-content">{excerpt_escaped}</div>
+                    <div class="citation-tooltip-chunk">Chunk ID: {chunk_id_escaped}</div>
+                </div>
+                """
                 html_citations.append(
-                    f'<span class="citation" title="{title}">[{num}]</span>'
+                    f'<span class="citation">{tooltip_html}[{num}]</span>'
                 )
             else:
                 html_citations.append(f'<span class="citation">[{num}]</span>')
@@ -239,7 +314,7 @@ def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
     answer_with_citations = re.sub(citation_pattern, replace_citation, answer)
     
     # References 섹션 생성
-    references_html = "<div class='references'><h4>📚 References</h4><ol>"
+    references_html = "<div class='references'><h4>References</h4><ol>"
     for source in sources:
         file_name = source.get('file', 'Unknown')
         chunk_id = source.get('chunk_id', 'N/A')

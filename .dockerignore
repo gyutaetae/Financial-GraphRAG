@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+logs/*.log
+*.log
+
+# Storage (will be mounted as volume)
+storage/
+graph_storage/
+graph_storage_api/
+graph_storage_hybrid/
+graph_storage_hybrid_backup*/
+my_graph_data/
+
+# Temporary files
+*.tmp
+temp_*.pdf
+*_uploaded_temp.pdf
+*.pdf.tmp
+
+# HTML visualizations
+*.html
+!graph_visualization_streamlit.html
+
+# Data sources
+data_sources.json
+src/data_sources.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (keep essential ones)
+*.md
+!README.md
+!schema.md
+
+# Test files
+test_*
+*_test.py
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+

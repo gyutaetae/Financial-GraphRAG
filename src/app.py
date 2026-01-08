@@ -530,6 +530,10 @@ async def query(request: QueryRequest):
                 
                 # Executive Report 형식 프롬프트로 재생성
                 if sources_list:
+                    # 실제 소스 개수만 사용하도록 제한
+                    max_sources = min(len(sources_list), 10)  # 최대 10개
+                    sources_list = sources_list[:max_sources]
+                    
                     report_prompt = get_executive_report_prompt(request.question, sources_list)
                     
                     client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
@@ -543,6 +547,27 @@ async def query(request: QueryRequest):
                         max_tokens=2000
                     )
                     response = llm_response.choices[0].message.content.strip()
+                    
+                    # 응답에서 실제로 사용된 citation 번호 추출 및 필터링
+                    import re
+                    citation_pattern = r'\[(\d+)\]'
+                    used_citations = set()
+                    for match in re.finditer(citation_pattern, response):
+                        citation_num = int(match.group(1))
+                        if 1 <= citation_num <= len(sources_list):
+                            used_citations.add(citation_num)
+                    
+                    # 사용된 citation에 해당하는 소스만 유지
+                    if used_citations:
+                        sources_list = [s for s in sources_list if s['id'] in used_citations]
+                        # ID를 1부터 다시 매핑
+                        for idx, source in enumerate(sources_list, 1):
+                            old_id = source['id']
+                            source['id'] = idx
+                            # 응답에서 citation 번호 재매핑
+                            response = response.replace(f'[{old_id}]', f'[{idx}]')
+                            # 여러 번호가 함께 있는 경우도 처리 (예: [1][2] -> [1][2])
+                            response = re.sub(rf'\[{old_id}\]', f'[{idx}]', response)
                 else:
                     # 출처가 없으면 원본 답변 사용
                     response = base_answer
