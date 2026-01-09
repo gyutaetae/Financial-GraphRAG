@@ -501,17 +501,21 @@ def get_direct_engine():
     """Streamlit Cloud에서 직접 엔진 가져오기"""
     global _direct_engine
     if _direct_engine is None and DIRECT_ENGINE_AVAILABLE:
-        _direct_engine = HybridGraphRAGEngine(
-            working_dir="./graph_storage_hybrid",
-            enable_local=False,  # Streamlit Cloud에서는 Ollama 없음
-            enable_neo4j=False   # Streamlit Cloud에서는 Neo4j 없음
-        )
+        try:
+            _direct_engine = HybridGraphRAGEngine(
+                working_dir="./graph_storage_hybrid",
+                enable_local=False,  # Streamlit Cloud에서는 Ollama 없음
+                enable_neo4j=False   # Streamlit Cloud에서는 Neo4j 없음
+            )
+        except Exception as e:
+            st.error(f"엔진 초기화 실패: {str(e)}")
+            return None
     return _direct_engine
 
 # 캐시: 백엔드 상태/질의 (규칙: st.cache_data로 무거운 호출 캐싱)
 @st.cache_data(ttl=30, show_spinner=False)
-def cached_health(api_base_url: str) -> bool:
-    if USE_DIRECT_ENGINE:
+def cached_health(api_base_url) -> bool:
+    if USE_DIRECT_ENGINE or api_base_url is None:
         # Streamlit Cloud: 직접 엔진 사용 가능 여부 확인
         return DIRECT_ENGINE_AVAILABLE
     try:
@@ -572,10 +576,18 @@ with col1:
 with col2:
     server_connected = cached_health(API_BASE_URL)
     
+    # Streamlit Cloud 모드일 때는 다른 메시지 표시
+    if USE_DIRECT_ENGINE:
+        status_text = "Direct Engine Mode"
+        status_color = "#28a745"
+    else:
+        status_text = "Backend Connected" if server_connected else "Backend Disconnected"
+        status_color = "#28a745" if server_connected else "#dc3545"
+    
     status_html = f"""
     <div style="text-align: right; padding: 10px;">
-        <span style="color: {'#28a745' if server_connected else '#dc3545'}; font-size: 12px;">
-            ● Backend {'Connected' if server_connected else 'Disconnected'}
+        <span style="color: {status_color}; font-size: 12px;">
+            ● {status_text}
         </span>
     </div>
     """
