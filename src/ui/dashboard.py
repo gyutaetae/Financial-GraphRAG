@@ -379,9 +379,9 @@ with tab3:
     
     # Summary metrics
     col1, col2, col3 = st.columns(3)
-        with col1:
+    with col1:
         st.metric("PDF Documents", len(data_sources["pdfs"]))
-        with col2:
+    with col2:
         st.metric("URLs", len(data_sources["urls"]))
     with col3:
         st.metric("Text Entries", len(data_sources["texts"]))
@@ -400,7 +400,7 @@ with tab3:
             with col3:
                 if st.button("Delete", key=f"delete_pdf_{idx}"):
                     delete_data_source("pdfs", idx)
-                        st.rerun()
+                    st.rerun()
             with st.expander("Preview"):
                 st.text(pdf.get('content_preview', 'No preview'))
         st.markdown("---")
@@ -417,7 +417,7 @@ with tab3:
             with col3:
                 if st.button("Delete", key=f"delete_url_{idx}"):
                     delete_data_source("urls", idx)
-                        st.rerun()
+                    st.rerun()
             with st.expander("Preview"):
                 st.text(url.get('content_preview', 'No preview'))
         st.markdown("---")
@@ -434,7 +434,7 @@ with tab3:
             with col3:
                 if st.button("Delete", key=f"delete_text_{idx}"):
                     delete_data_source("texts", idx)
-                        st.rerun()
+                    st.rerun()
             with st.expander("Preview"):
                 st.text(text.get('content_preview', 'No preview'))
         st.markdown("---")
