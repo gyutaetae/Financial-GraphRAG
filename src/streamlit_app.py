@@ -30,7 +30,7 @@ except ImportError:
 # 페이지 설정 - Executive Dashboard
 st.set_page_config(
     page_title="VIK AI: Executive Intelligence",
-    page_icon="📊",
+    page_icon="💼",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -394,7 +394,7 @@ def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
     html_answer = re.sub(citation_pattern, replace_citation, answer)
     
     # References 섹션 생성
-    references_html = '<div class="references"><h3>📚 References</h3>'
+    references_html = '<div class="references"><h3>References</h3>'
     for source in sources:
         cite_id = source.get('id')
         file_name = source.get('file', 'Unknown')
@@ -438,7 +438,7 @@ def render_citations_with_popover(sources: List[Dict], message_idx: int = 0):
         return
     
     st.markdown("---")
-    st.markdown("### 📚 Source Details")
+    st.markdown("### Source Details")
     
     # 각 출처를 expander 또는 popover로 표시
     cols = st.columns(min(len(sources), 3))
@@ -567,8 +567,8 @@ def cached_query(api_base_url: str, payload_json: str) -> Dict:
 col1, col2, col3 = st.columns([2, 1, 1])
 
 with col1:
-    st.markdown("# 📊 VIK AI: Executive Intelligence")
-    st.markdown("*Powered by Hybrid GraphRAG*")
+    st.markdown("# VIK AI")
+    st.markdown("*Powered by GraphRAG*")
 
 with col2:
     server_connected = cached_health(API_BASE_URL)
@@ -597,14 +597,14 @@ with col3:
 st.markdown("---")
 
 # Main Tabs
-tab1, tab2, tab3 = st.tabs(["💬 Query Interface", "📤 Data Ingestion", "📊 Data Sources"])
+tab1, tab2, tab3 = st.tabs(["Query Interface", "Data Ingestion", "Data Sources"])
 
 # Tab 1: Query Interface
 with tab1:
     st.markdown("### Query Interface")
     
     # Advanced Settings Expander
-    with st.expander("⚙️ Advanced Settings", expanded=False):
+    with st.expander("Advanced Settings", expanded=False):
         # Search Mode
         search_mode = st.radio(
             "Search Mode",
@@ -618,15 +618,15 @@ with tab1:
         
         # 웹 검색 활성화 토글
         enable_web_search = st.checkbox(
-            "🌐 Enable Web Search",
+            "Enable Web Search",
             value=False,
             help="Check this to allow AI to search the web for real-time information. Otherwise, it will ONLY use your uploaded PDF documents."
         )
         
         if enable_web_search:
-            st.warning("⚠️ Web search enabled: AI may search the web for LATEST/TODAY information if needed.")
+            st.warning("Web search enabled: AI may search the web for LATEST/TODAY information if needed.")
         else:
-            st.success("✅ Document-only mode: AI will answer ONLY from your uploaded PDFs.")
+            st.info("Document-only mode: AI will answer ONLY from your uploaded PDFs.")
         
         st.markdown("---")
         
@@ -655,7 +655,7 @@ with tab1:
             st.caption(f"Current: {top_k} chunks")
         
         st.markdown("---")
-        st.markdown("**📊 Parameter Guide:**")
+        st.markdown("**Parameter Guide:**")
         col_a, col_b = st.columns(2)
         with col_a:
             st.markdown("""
@@ -757,7 +757,7 @@ with tab1:
                     st.markdown(report_html, unsafe_allow_html=True)
                     
                     # Popover로 추가 상세 정보 제공 (선택사항)
-                    with st.expander(f"📎 View {len(sources)} Source(s) in Detail", expanded=False):
+                    with st.expander(f"View {len(sources)} Source(s) in Detail", expanded=False):
                         render_citations_with_popover(sources, message_idx=msg_idx)
 
                     # Evidence(클레임-근거) 표시
@@ -867,9 +867,9 @@ with tab2:
         if uploaded_file:
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.info(f"📄 {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
+                st.info(f"{uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
             with col2:
-                if st.button("🚀 Process PDF", type="primary", use_container_width=True):
+                if st.button("Process PDF", type="primary", use_container_width=True):
                     with st.spinner("Processing PDF document..."):
                         try:
                             # 파일을 임시로 저장
@@ -911,7 +911,7 @@ with tab2:
                                             })
                                             save_data_sources(data_sources)
                                             
-                                            st.success(f"✅ {uploaded_file.name} successfully indexed!")
+                                            st.success(f"{uploaded_file.name} successfully indexed!")
                                         except Exception as e:
                                             st.error(f"인덱싱 실패: {str(e)}")
                                 else:
@@ -932,7 +932,7 @@ with tab2:
                                         })
                                         save_data_sources(data_sources)
                                         
-                                        st.success(f"✅ {uploaded_file.name} successfully indexed!")
+                                        st.success(f"{uploaded_file.name} successfully indexed!")
                                     else:
                                         st.error(f"Indexing failed: {response.status_code} - {response.text}")
                         except Exception as e:
@@ -944,7 +944,7 @@ with tab2:
             placeholder="https://example.com"
         )
         
-        if st.button("🚀 Crawl & Index", type="primary"):
+        if st.button("Crawl & Index", type="primary"):
             if url_input.strip():
                 st.info("URL crawling feature coming soon!")
             else:
@@ -957,16 +957,16 @@ with tab3:
     data_sources = load_data_sources()
     
     # PDF Sources
-    st.markdown("#### 📄 PDF Documents")
+    st.markdown("#### PDF Documents")
     if data_sources["pdf"]:
         for idx, source in enumerate(data_sources["pdf"]):
             col1, col2, col3 = st.columns([3, 2, 1])
             with col1:
-                st.text(f"📄 {source['filename']}")
+                st.text(f"{source['filename']}")
             with col2:
                 st.text(f"Size: {source['size'] / 1024:.1f} KB | Indexed: {source['indexed_at']}")
             with col3:
-                if st.button("🗑️", key=f"del_pdf_{idx}"):
+                if st.button("Delete", key=f"del_pdf_{idx}"):
                     if delete_data_source("pdf", idx):
                         st.rerun()
     else:
@@ -984,7 +984,7 @@ with tab3:
             with col2:
                 st.text(f"Length: {source['length']} chars | Indexed: {source['indexed_at']}")
             with col3:
-                if st.button("🗑️", key=f"del_text_{idx}"):
+                if st.button("Delete", key=f"del_text_{idx}"):
                     if delete_data_source("text", idx):
                         st.rerun()
     else:
@@ -993,16 +993,16 @@ with tab3:
     st.markdown("---")
     
     # URL Sources
-    st.markdown("#### 🌐 URL Sources")
+    st.markdown("#### URL Sources")
     if data_sources["url"]:
         for idx, source in enumerate(data_sources["url"]):
             col1, col2, col3 = st.columns([3, 2, 1])
             with col1:
-                st.text(f"🌐 {source['url']}")
+                st.text(f"{source['url']}")
             with col2:
                 st.text(f"Indexed: {source['indexed_at']}")
             with col3:
-                if st.button("🗑️", key=f"del_url_{idx}"):
+                if st.button("Delete", key=f"del_url_{idx}"):
                     if delete_data_source("url", idx):
                         st.rerun()
     else:
