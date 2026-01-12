@@ -42,8 +42,8 @@ API_MODELS = {
 
 # LOCAL 모드일 때 사용할 모델들
 LOCAL_MODELS = {
-    # LLM 모델: llama3.2:3b는 Ollama의 작은 모델이에요!
-    "llm": "llama3.2:3b",
+    # LLM 모델: qwen2.5-coder:3b는 코딩에 특화된 Ollama 모델이에요!
+    "llm": "qwen2.5-coder:3b",
     # Embedding 모델: nomic-embed-text는 Ollama의 임베딩 모델이에요!
     "embedding": "nomic-embed-text",
     # Embedding 차원: nomic-embed-text는 768차원 벡터를 만들어요!
@@ -105,7 +105,19 @@ def get_models():
         # LOCAL 모드면 LOCAL_MODELS를 반환해요!
         return LOCAL_MODELS
 
-# --- [8] 설정 검증 ---
+# --- [8] MCP 서버 설정 ---
+# MCP (Model Context Protocol) 서버 설정
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+MCP_CONFIG_PATH = os.getenv("MCP_CONFIG_PATH", "mcp-config.json")
+MCP_LAZY_LOAD = os.getenv("MCP_LAZY_LOAD", "true").lower() in ("true", "1", "yes")
+
+# --- [9] 도메인 스키마 설정 ---
+# Event-Actor-Asset-Factor-Region 도메인 스키마 활성화
+ENABLE_DOMAIN_SCHEMA = os.getenv("ENABLE_DOMAIN_SCHEMA", "true").lower() in ("true", "1", "yes")
+# 도메인 분류에 사용할 모델 (기본값: gpt-4o-mini)
+DOMAIN_CLASSIFICATION_MODEL = os.getenv("DOMAIN_CLASSIFICATION_MODEL", "gpt-4o-mini")
+
+# --- [10] 설정 검증 ---
 # validate_config()는 "설정이 올바른지 확인하는" 함수예요!
 def validate_config():
     # API 모드인데 API 키가 없으면 에러를 발생시켜요!
@@ -114,9 +126,15 @@ def validate_config():
             "❌ API 모드를 사용하려면 OPENAI_API_KEY 환경변수를 설정해주세요!\n"
             "💡 예시: export OPENAI_API_KEY='sk-...'"
         )
+    
+    # MCP 검증 (경고만, 필수 아님)
+    if not TAVILY_API_KEY:
+        print("⚠️  TAVILY_API_KEY가 설정되지 않았습니다. Tavily Search를 사용할 수 없습니다.")
+        print("💡 Tavily API 키: https://tavily.com/")
+    
     return True
 
-# --- [9] 설정 정보 출력 ---
+# --- [11] 설정 정보 출력 ---
 # print_config()는 "현재 설정을 보여주는" 함수예요!
 def print_config():
     models = get_models()
@@ -133,5 +151,10 @@ def print_config():
     print(f"🗄️  Neo4j 자동 업로드: {'✅ 활성화' if NEO4J_AUTO_EXPORT else '❌ 비활성화'}")
     if NEO4J_AUTO_EXPORT:
         print(f"🔗 Neo4j URI: {'✅ 설정됨' if NEO4J_URI else '❌ 없음'}")
+    print(f"🔌 MCP Lazy Load: {'✅ 활성화' if MCP_LAZY_LOAD else '❌ 비활성화'}")
+    print(f"🔍 Tavily Search API: {'✅ 설정됨' if TAVILY_API_KEY else '❌ 없음'}")
+    print(f"🏗️  도메인 스키마: {'✅ 활성화' if ENABLE_DOMAIN_SCHEMA else '❌ 비활성화'}")
+    if ENABLE_DOMAIN_SCHEMA:
+        print(f"🤖 분류 모델: {DOMAIN_CLASSIFICATION_MODEL}")
     print("=" * 50)
 

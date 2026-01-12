@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "yahoo-finance": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-yahoo-finance"],
+      "enabled": true,
+      "lazyLoad": true,
+      "description": "실시간 주가, 재무제표, 기업 정보 조회",
+      "tools": [
+        "get_stock_price",
+        "get_company_info",
+        "get_financial_data",
+        "get_stock_fundamentals",
+        "get_price_history"
+      ],
+      "timeout": 300,
+      "maxRetries": 3
+    },
+    "tavily-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-tavily"],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      },
+      "enabled": true,
+      "lazyLoad": true,
+      "description": "최신 뉴스 및 웹 검색 (Tavily)",
+      "tools": [
+        "tavily_search"
+      ],
+      "timeout": 300,
+      "maxRetries": 3
+    }
+  },
+  "settings": {
+    "lazyLoadDefault": true,
+    "autoCleanupMinutes": 5,
+    "maxConcurrentServers": 2,
+    "memoryLimitMB": 512
+  }
+}

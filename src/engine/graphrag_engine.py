@@ -41,6 +41,7 @@ from config import (
     DEV_MODE_MAX_CHARS,
     validate_config,
     NEO4J_AUTO_EXPORT,
+    ENABLE_DOMAIN_SCHEMA,
 )
 
 from utils import (
@@ -56,6 +57,9 @@ from utils import (
 from engine.planner import QueryPlanner
 from models.neo4j_models import GraphStats
 from engine.neo4j_retriever import Neo4jRetriever
+from engine.entity_classifier import EntityClassifier
+from engine.relationship_inferencer import RelationshipInferencer
+from db.neo4j_db import Neo4jDatabase
 
 
 class HybridGraphRAGEngine:
@@ -108,10 +112,17 @@ class HybridGraphRAGEngine:
         # Neo4j 연결이 없으면 QueryExecutor에서 예외가 날 수 있으니 lazy 하게 사용
         self._neo4j_retriever: Neo4jRetriever | None = None
         
+        # 도메인 스키마 관련 컴포넌트 (lazy loading)
+        self._entity_classifier: EntityClassifier | None = None
+        self._relationship_inferencer: RelationshipInferencer | None = None
+        self._neo4j_db: Neo4jDatabase | None = None
+        self.enable_domain_schema = ENABLE_DOMAIN_SCHEMA
+        
         print(f"HybridGraphRAGEngine 초기화 완료!")
         print(f"작업 디렉토리: {self.working_dir}")
         print(f"인덱싱 모드: OpenAI API")
         print(f"질문 모드: API 또는 LOCAL 선택 가능")
+        print(f"도메인 스키마: {'활성화' if self.enable_domain_schema else '비활성화'}")
     
     async def ainsert(self, text: str) -> None:
         """
@@ -147,7 +158,12 @@ class HybridGraphRAGEngine:
         
         print("인덱싱 완료! (비동기 병렬 처리 + 텍스트 전처리 적용)")
         
-        # 5) Neo4j로 자동 업로드 (설정되어 있을 경우)
+        # 5) 도메인 노드 변환 (옵션)
+        if self.enable_domain_schema:
+            print("🔄 도메인 노드 변환 시작...")
+            await self._convert_to_domain_nodes()
+        
+        # 6) Neo4j로 자동 업로드 (설정되어 있을 경우)
         if NEO4J_AUTO_EXPORT:
             print("Neo4j로 자동 업로드 시작...")
             try:
@@ -615,4 +631,168 @@ class HybridGraphRAGEngine:
             relationships=G.number_of_edges(),
             status="success"
         )
+    
+    async def _convert_to_domain_nodes(self) -> None:
+        """
+        Entity를 Event/Actor/Asset/Factor/Region으로 변환
+        
+        단계:
+        1. GraphML에서 Entity 읽기
+        2. EntityClassifier로 분류
+        3. Neo4j에 도메인 노드 생성
+        4. 관계 추론 (TRIGGERS, IMPACTS, INVOLVED_IN, LOCATED_IN)
+        """
+        try:
+            import networkx as nx
+            
+            # Lazy loading
+            if self._entity_classifier is None:
+                self._entity_classifier = EntityClassifier()
+            if self._relationship_inferencer is None:
+                self._relationship_inferencer = RelationshipInferencer()
+            if self._neo4j_db is None:
+                self._neo4j_db = Neo4jDatabase()
+            
+            # 1. GraphML에서 Entity 읽기
+            graphml_path = os.path.join(self.working_dir, "graph_chunk_entity_relation.graphml")
+            if not os.path.exists(graphml_path):
+                print("⚠️  GraphML 파일이 없어서 도메인 노드 변환을 건너뜁니다.")
+                return
+            
+            G = nx.read_graphml(graphml_path)
+            
+            # Entity 노드만 필터링
+            entity_nodes = [
+                (node_id, data)
+                for node_id, data in G.nodes(data=True)
+                if data.get('entity_type') == 'entity' or 'entity_name' in data
+            ]
+            
+            if not entity_nodes:
+                print("⚠️  Entity 노드가 없어서 도메인 노드 변환을 건너뜁니다.")
+                return
+            
+            print(f"📊 {len(entity_nodes)}개의 Entity 노드 발견")
+            
+            # 2. Entity 분류
+            entities_to_classify = []
+            for node_id, data in entity_nodes[:50]:  # 최대 50개만 처리 (메모리 절약)
+                entities_to_classify.append({
+                    "id": node_id,
+                    "name": data.get('entity_name', node_id),
+                    "type": data.get('entity_type', 'unknown'),
+                    "description": data.get('description', '')
+                })
+            
+            print(f"🔍 {len(entities_to_classify)}개의 Entity 분류 시작...")
+            classifications = await self._entity_classifier.classify_batch(entities_to_classify)
+            
+            # 3. Neo4j에 도메인 노드 생성
+            domain_nodes = {
+                "Event": [],
+                "Actor": [],
+                "Asset": [],
+                "Factor": [],
+                "Region": []
+            }
+            
+            for entity, classification in zip(entities_to_classify, classifications):
+                category = classification.get("category", "None")
+                confidence = classification.get("confidence", 0.0)
+                
+                # 신뢰도가 0.6 이상인 경우만 생성
+                if confidence < 0.6 or category == "None":
+                    continue
+                
+                # 노드 속성 추론
+                node_properties = self._entity_classifier.infer_node_properties(
+                    entity_name=entity["name"],
+                    category=category,
+                    entity_data=entity
+                )
+                
+                # Neo4j에 노드 생성
+                try:
+                    await asyncio.to_thread(
+                        self._neo4j_db.create_domain_node,
+                        node_type=category,
+                        node_id=entity["id"],
+                        node_data=node_properties
+                    )
+                    
+                    # 노드 정보 저장 (관계 추론용)
+                    domain_nodes[category].append({
+                        "id": entity["id"],
+                        **node_properties
+                    })
+                    
+                    print(f"  ✅ {category} 노드 생성: {entity['name']} (신뢰도: {confidence:.2f})")
+                    
+                except Exception as e:
+                    print(f"  ⚠️  {category} 노드 생성 실패: {entity['name']} - {e}")
+            
+            # 통계 출력
+            total_nodes = sum(len(nodes) for nodes in domain_nodes.values())
+            print(f"\n📊 도메인 노드 생성 완료: 총 {total_nodes}개")
+            for category, nodes in domain_nodes.items():
+                if nodes:
+                    print(f"  - {category}: {len(nodes)}개")
+            
+            # 4. 관계 추론 (Event, Factor, Asset이 있을 때만)
+            if domain_nodes["Event"] and domain_nodes["Factor"]:
+                print("\n🔗 관계 추론 시작...")
+                
+                # Event → Factor (TRIGGERS)
+                for event in domain_nodes["Event"][:10]:  # 최대 10개만
+                    triggers = await self._relationship_inferencer.infer_triggers(
+                        event=event,
+                        factors=domain_nodes["Factor"]
+                    )
+                    
+                    for rel in triggers:
+                        try:
+                            await asyncio.to_thread(
+                                self._neo4j_db.create_domain_relationship,
+                                rel_type=rel["type"],
+                                source_id=rel["source_id"],
+                                target_id=rel["target_id"],
+                                source_label=rel["source_label"],
+                                target_label=rel["target_label"],
+                                rel_data=rel
+                            )
+                            print(f"  ✅ TRIGGERS 관계 생성: {event['name']} → Factor")
+                        except Exception as e:
+                            print(f"  ⚠️  TRIGGERS 관계 생성 실패: {e}")
+                
+                # Factor → Asset (IMPACTS)
+                if domain_nodes["Asset"]:
+                    for factor in domain_nodes["Factor"][:10]:  # 최대 10개만
+                        impacts = await self._relationship_inferencer.infer_impacts(
+                            factor=factor,
+                            assets=domain_nodes["Asset"]
+                        )
+                        
+                        for rel in impacts:
+                            try:
+                                await asyncio.to_thread(
+                                    self._neo4j_db.create_domain_relationship,
+                                    rel_type=rel["type"],
+                                    source_id=rel["source_id"],
+                                    target_id=rel["target_id"],
+                                    source_label=rel["source_label"],
+                                    target_label=rel["target_label"],
+                                    rel_data=rel
+                                )
+                                print(f"  ✅ IMPACTS 관계 생성: Factor → {rel.get('direction', 'Unknown')} Asset")
+                            except Exception as e:
+                                print(f"  ⚠️  IMPACTS 관계 생성 실패: {e}")
+                
+                print("✅ 도메인 노드 변환 완료!")
+            else:
+                print("⚠️  Event 또는 Factor가 없어서 관계 추론을 건너뜁니다.")
+        
+        except Exception as e:
+            print(f"❌ 도메인 노드 변환 중 에러: {e}")
+            import traceback
+            traceback.print_exc()
 

@@ -503,11 +503,11 @@ QUESTION: {question}
 RESPONSE FORMAT:
 - Use citations [1], [2] after EVERY claim
 - PLAIN TEXT ONLY - no HTML or markup
-- At the end, list all sources with: [1] filename.pdf, Page X
+- DO NOT add a "Sources:" or "References:" section - citations in text are sufficient
 - If no relevant information exists in sources, say so explicitly
 - Write in a professional, executive report style
 
-Begin your strictly grounded response (PLAIN TEXT ONLY):"""
+Begin your strictly grounded response (PLAIN TEXT ONLY, NO SOURCES SECTION):"""
 
 
 def get_executive_report_prompt(question: str, sources: List[dict]) -> str:

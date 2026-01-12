@@ -15,15 +15,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # engine 모듈에서 HybridGraphRAGEngine을 가져와요!
 from engine import HybridGraphRAGEngine
-from config import print_config, validate_config, ROUTER_MODEL, ROUTER_TEMPERATURE, WEB_SEARCH_MAX_RESULTS, OPENAI_API_KEY, OPENAI_BASE_URL
+from config import print_config, validate_config, ROUTER_MODEL, ROUTER_TEMPERATURE, WEB_SEARCH_MAX_RESULTS, OPENAI_API_KEY, OPENAI_BASE_URL, MCP_CONFIG_PATH
 from search import web_search, format_search_results
 from openai import AsyncOpenAI
 from utils import get_executive_report_prompt, get_web_search_report_prompt
+from mcp import MCPManager
 
 # --- [1] 전역 변수 ---
 # engine은 "GraphRAG 엔진"이에요!
 # None은 "아직 아무것도 없다"는 뜻이에요!
 engine: HybridGraphRAGEngine = None
+mcp_manager: MCPManager = None
 
 # --- [2] 서버 시작/종료 이벤트 핸들러 ---
 # @asynccontextmanager는 "비동기 컨텍스트 매니저"를 만드는 거예요!
@@ -31,7 +33,7 @@ engine: HybridGraphRAGEngine = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 서버가 시작될 때 실행되는 부분이에요!
-    global engine
+    global engine, mcp_manager
     
     # 설정 정보를 출력해요!
     print_config()
@@ -45,11 +47,19 @@ async def lifespan(app: FastAPI):
     engine = HybridGraphRAGEngine()
     print("✅ HybridGraphRAGEngine 준비 완료!")
     
+    # MCP Manager 초기화
+    print("🚀 MCP Manager 초기화 중...")
+    mcp_manager = MCPManager(config_path=MCP_CONFIG_PATH)
+    await mcp_manager.start_cleanup_task()
+    print("✅ MCP Manager 준비 완료 (lazy load 모드)")
+    
     # yield는 "여기서 잠시 멈춰서 서버를 실행하고, 나중에 다시 돌아와"라는 뜻이에요!
     yield
     
-    # 서버가 종료될 때 실행되는 부분이에요! (현재는 비어있어요)
-    pass
+    # 서버가 종료될 때 실행되는 부분이에요!
+    if mcp_manager:
+        await mcp_manager.shutdown()
+        print("✅ MCP Manager 종료 완료")
 
 # --- [3] FastAPI 앱 초기화 ---
 # FastAPI()는 "웹 서버 앱을 만들어줘"라는 뜻이에요!
@@ -80,6 +90,8 @@ class QueryRequest(BaseModel):
     search_type: str = "local"
     # enable_web_search는 "웹 검색을 활성화할지" 정해요! (기본값: False)
     enable_web_search: bool = False
+    # use_multi_agent는 "Multi-Agent 모드를 사용할지" 정해요! (기본값: False)
+    use_multi_agent: bool = False
     
     # Pydantic v2 스타일로 예시 설정
     model_config = {
@@ -88,7 +100,8 @@ class QueryRequest(BaseModel):
                 "question": "What is NVIDIA revenue?",
                 "mode": "local",
                 "search_type": "local",
-                "enable_web_search": False
+                "enable_web_search": False,
+                "use_multi_agent": False
             }
         }
     }
@@ -287,6 +300,39 @@ async def health():
         "engine_ready": engine is not None
     }
 
+# --- [7-1] MCP 상태 확인 엔드포인트 ---
+@app.get("/mcp/status")
+async def mcp_status():
+    """MCP Manager 상태 확인"""
+    if mcp_manager is None:
+        return {
+            "status": "disabled",
+            "message": "MCP Manager가 초기화되지 않았습니다"
+        }
+    
+    status = mcp_manager.get_status()
+    return {
+        "status": "active",
+        "message": "MCP Manager가 정상 작동 중입니다",
+        **status
+    }
+
+# --- [7-2] 메모리 모니터링 엔드포인트 ---
+@app.get("/memory")
+async def memory_status():
+    """메모리 사용률 확인 (8GB RAM 환경 모니터링)"""
+    import psutil
+    
+    mem = psutil.virtual_memory()
+    return {
+        "total_gb": round(mem.total / (1024 ** 3), 2),
+        "used_gb": round(mem.used / (1024 ** 3), 2),
+        "available_gb": round(mem.available / (1024 ** 3), 2),
+        "percent": mem.percent,
+        "status": "healthy" if mem.percent < 85 else "warning",
+        "message": "메모리 사용률이 정상입니다." if mem.percent < 85 else "메모리 사용률이 높습니다!"
+    }
+
 # --- [8] 그래프 통계 엔드포인트 ---
 # @app.get("/graph_stats")는 "그래프 통계를 보여주는" 엔드포인트예요!
 @app.get("/graph_stats")
@@ -470,8 +516,40 @@ async def query(request: QueryRequest):
         # #region agent log
         import json
         with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"location":"app.py:325","message":"Query entry","data":{"question":request.question,"mode":request.mode,"enable_web_search":request.enable_web_search},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H2,H5"})+'\n')
+            f.write(json.dumps({"location":"app.py:325","message":"Query entry","data":{"question":request.question,"mode":request.mode,"enable_web_search":request.enable_web_search,"use_multi_agent":request.use_multi_agent},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H2,H5"})+'\n')
         # #endregion
+        
+        # --- Multi-Agent Mode ---
+        if request.use_multi_agent:
+            print(f"🤖 Multi-Agent 모드로 처리: '{request.question}'")
+            
+            from agents import MasterAgent
+            from agents.agent_context import AgentContext, QueryComplexity
+            
+            # AgentContext 생성
+            context = AgentContext(
+                question=request.question,
+                complexity=QueryComplexity.COMPLEX,  # 기본값, Master가 재분석
+                enable_web_search=request.enable_web_search
+            )
+            
+            # Master Agent 실행 (MCP Manager 전달)
+            master = MasterAgent(engine=engine, mcp_manager=mcp_manager)
+            context = await master.execute(context)
+            
+            # 결과 반환
+            return {
+                "question": request.question,
+                "answer": context.final_report,
+                "sources": context.sources,
+                "confidence": context.confidence,
+                "recommendation": context.recommendation,
+                "insights": context.insights,
+                "retrieval_backend": context.retrieval_backend,
+                "processing_steps": context.processing_steps,
+                "mode": "MULTI_AGENT",
+                "status": "success"
+            }
         
         # --- Decision Layer (Router) ---
         # 웹 검색이 활성화된 경우에만 질문 분류
@@ -604,6 +682,12 @@ async def query(request: QueryRequest):
                 print(f"[VALIDATION] Confidence: {validation_result['confidence_score']:.1%}")
                 print(f"[VALIDATION] Valid citations: {validation_result['valid_citations']}/{validation_result['total_citations']}")
 
+                # #region agent log
+                import json
+                with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"location":"app.py:607","message":"Response before override check","data":{"response_preview":response[:500],"has_html_tags":"<a href" in response or "<div" in response,"sources_count":len(sources_list)},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H4"})+'\n')
+                # #endregion
+                
                 # Strict Grounding LLM이 '정보 없음'이라고 답했지만 실제로는 소스가 충분한 경우 보정
                 override_applied = False
                 if response.strip() == "해당 문서들에서는 관련 정보를 찾을 수 없습니다." and len(sources_list) > 0:
@@ -678,6 +762,12 @@ async def query(request: QueryRequest):
             source = "GRAPH_RAG"
         
         # #region agent log
+        import json
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:678","message":"Final response before return","data":{"response_preview":response[:500],"has_html_tags":"<a href" in response or "<div" in response,"sources_count":len(sources_list),"validation_confidence":validation_result.get('confidence_score',0) if 'validation_result' in locals() else None},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H4"})+'\n')
+        # #endregion
+        
+        # #region agent log
         with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
             f.write(json.dumps({"location":"app.py:338","message":"Query response","data":{"response":response[:500] if response else None,"response_type":type(response).__name__,"source":source},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H3"})+'\n')
         # #endregion
@@ -704,6 +794,157 @@ async def query(request: QueryRequest):
         # #endregion
         # except는 "만약 에러가 생기면"이라는 뜻이에요!
         raise HTTPException(status_code=500, detail=f"질문 처리 중 에러가 발생했어요: {str(e)}")
+
+
+# --- [12] 도메인 특화 엔드포인트 ---
+
+@app.get("/domain/event/{event_name}")
+async def get_event_impact(event_name: str):
+    """
+    Event의 인과관계 체인 조회
+    
+    Args:
+        event_name: Event 이름
+    
+    Returns:
+        Event → Factor → Asset 인과관계 체인
+    """
+    try:
+        from engine.executor import QueryExecutor
+        from engine.neo4j_retriever import query_event_impact_chain
+        
+        executor = QueryExecutor()
+        try:
+            impact_chain = query_event_impact_chain(executor, event_name)
+            
+            return {
+                "event": event_name,
+                "impact_chain": impact_chain,
+                "count": len(impact_chain),
+                "status": "success"
+            }
+        finally:
+            executor.close()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Event impact chain 조회 중 에러: {str(e)}")
+
+
+@app.get("/domain/actor/{actor_name}")
+async def get_actor_influence(actor_name: str):
+    """
+    Actor의 영향력 조회
+    
+    Args:
+        actor_name: Actor 이름
+    
+    Returns:
+        Actor가 관여한 Event와 그 영향
+    """
+    try:
+        from engine.executor import QueryExecutor
+        from engine.neo4j_retriever import query_actor_influence
+        
+        executor = QueryExecutor()
+        try:
+            influence_data = query_actor_influence(executor, actor_name)
+            
+            return {
+                "actor": actor_name,
+                "influence": influence_data,
+                "count": len(influence_data),
+                "status": "success"
+            }
+        finally:
+            executor.close()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Actor influence 조회 중 에러: {str(e)}")
+
+
+@app.get("/domain/region/{region_name}")
+async def get_regional_events(region_name: str):
+    """
+    지역별 Event 조회
+    
+    Args:
+        region_name: Region 이름
+    
+    Returns:
+        특정 지역의 Event와 영향받은 Asset
+    """
+    try:
+        from engine.executor import QueryExecutor
+        from engine.neo4j_retriever import query_regional_events
+        
+        executor = QueryExecutor()
+        try:
+            regional_events = query_regional_events(executor, region_name)
+            
+            return {
+                "region": region_name,
+                "events": regional_events,
+                "count": len(regional_events),
+                "status": "success"
+            }
+        finally:
+            executor.close()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Regional events 조회 중 에러: {str(e)}")
+
+
+@app.get("/domain/asset/{asset_name}")
+async def get_asset_factors(asset_name: str):
+    """
+    Asset에 영향을 주는 Factor들 조회
+    
+    Args:
+        asset_name: Asset 이름
+    
+    Returns:
+        Asset에 영향을 주는 Factor 리스트
+    """
+    try:
+        from engine.executor import QueryExecutor
+        from engine.neo4j_retriever import query_asset_factors
+        
+        executor = QueryExecutor()
+        try:
+            factors = query_asset_factors(executor, asset_name)
+            
+            return {
+                "asset": asset_name,
+                "factors": factors,
+                "count": len(factors),
+                "status": "success"
+            }
+        finally:
+            executor.close()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Asset factors 조회 중 에러: {str(e)}")
+
+
+@app.post("/domain/schema/init")
+async def initialize_domain_schema():
+    """
+    도메인 스키마 초기화 (Constraint 및 Index 생성)
+    
+    Returns:
+        초기화 결과
+    """
+    try:
+        from db.neo4j_db import Neo4jDatabase
+        
+        db = Neo4jDatabase()
+        result = db.create_domain_schema()
+        
+        return result
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"도메인 스키마 초기화 중 에러: {str(e)}")
+
 
 # --- [13] 서버 실행 ---
 # if __name__ == "__main__": 이건 "이 파일을 직접 실행했을 때만"이라는 뜻이에요!

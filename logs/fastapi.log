@@ -1,26 +1,26 @@
-INFO:     Started server process [66378]
+INFO:     Started server process [51834]
 INFO:     Waiting for application startup.
-INFO:nano-graphrag:Load KV full_docs with 5 data
-INFO:nano-graphrag:Load KV text_chunks with 5 data
+INFO:nano-graphrag:Load KV full_docs with 9 data
+INFO:nano-graphrag:Load KV text_chunks with 9 data
 INFO:nano-graphrag:Load KV llm_response_cache with 0 data
-INFO:nano-graphrag:Load KV community_reports with 4 data
-INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 227 nodes, 79 edges
-INFO:nano-vectordb:Load (227, 1536) data
-INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 227 data
-INFO:nano-graphrag:Load KV full_docs with 5 data
-INFO:nano-graphrag:Load KV text_chunks with 5 data
+INFO:nano-graphrag:Load KV community_reports with 5 data
+INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 340 nodes, 134 edges
+INFO:nano-vectordb:Load (340, 1536) data
+INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 340 data
+INFO:nano-graphrag:Load KV full_docs with 9 data
+INFO:nano-graphrag:Load KV text_chunks with 9 data
 INFO:nano-graphrag:Load KV llm_response_cache with 0 data
-INFO:nano-graphrag:Load KV community_reports with 4 data
-INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 227 nodes, 79 edges
-INFO:nano-vectordb:Load (227, 1536) data
-INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 227 data
-INFO:nano-graphrag:Load KV full_docs with 5 data
-INFO:nano-graphrag:Load KV text_chunks with 5 data
+INFO:nano-graphrag:Load KV community_reports with 5 data
+INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 340 nodes, 134 edges
+INFO:nano-vectordb:Load (340, 1536) data
+INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 340 data
+INFO:nano-graphrag:Load KV full_docs with 9 data
+INFO:nano-graphrag:Load KV text_chunks with 9 data
 INFO:nano-graphrag:Load KV llm_response_cache with 0 data
-INFO:nano-graphrag:Load KV community_reports with 4 data
-INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 227 nodes, 79 edges
-INFO:nano-vectordb:Load (227, 1536) data
-INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 227 data
+INFO:nano-graphrag:Load KV community_reports with 5 data
+INFO:nano-graphrag:Loaded graph from /tmp/graph_storage_hybrid/graph_chunk_entity_relation.graphml with 340 nodes, 134 edges
+INFO:nano-vectordb:Load (340, 1536) data
+INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_file': '/tmp/graph_storage_hybrid/vdb_entities.json'} 340 data
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ==================================================
@@ -33,92 +33,60 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 📏 Embedding 차원: 1536
 🔑 OpenAI API 키: ✅ 설정됨
 🗄️  Neo4j 자동 업로드: ❌ 비활성화
+🔌 MCP Lazy Load: ✅ 활성화
+🔍 Tavily Search API: ✅ 설정됨
+🏗️  도메인 스키마: ✅ 활성화
+🤖 분류 모델: gpt-4o-mini
 ==================================================
 🚀 HybridGraphRAGEngine 초기화 중...
 HybridGraphRAGEngine 초기화 완료!
 작업 디렉토리: /tmp/graph_storage_hybrid
 인덱싱 모드: OpenAI API
 질문 모드: API 또는 LOCAL 선택 가능
+도메인 스키마: 활성화
 ✅ HybridGraphRAGEngine 준비 완료!
-INFO:     127.0.0.1:60324 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60325 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60326 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60328 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60329 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60330 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:nano-graphrag:Revtrieved 3 communities
+🚀 MCP Manager 초기화 중...
+✅ MCP Manager 초기화 (lazy_load=True)
+✅ MCP Manager 준비 완료 (lazy load 모드)
+INFO:     127.0.0.1:59010 - "GET /health HTTP/1.1" 200 OK
+INFO:nano-graphrag:Revtrieved 5 communities
 INFO:nano-graphrag:Grouping to 1 groups for global search
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[DEBUG] 질문: f
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:engine.executor:Neo4j 연결 성공: neo4j+s://your-instance.databases.neo4j.io
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+📚 웹 검색 비활성화 - 업로드된 문서에서만 검색합니다
+📚 GraphRAG 모드로 처리 (mode: api, search_type: local, temperature: 0.2, top_k: 30)
+[DEBUG] 질문: nvidia
 [DEBUG] 모드: api
 [DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
-[DEBUG] 그래프 노드 수: 227, 엣지 수: 79
-질문 모드: OpenAI API
-🔍 [DEBUG] query_rag_api.aquery() 완료!
-⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
-💡 더 구체적인 질문을 시도해보세요!
-INFO:     127.0.0.1:60331 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60333 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60334 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60335 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:nano-graphrag:Revtrieved 3 communities
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: nvidia...)
+[VALIDATION] Confidence: 100.0%
+[VALIDATION] Valid citations: 0/0
+[WARNING] Low confidence or invalid response, replacing with 'no info' response
+INFO:     127.0.0.1:59020 - "POST /query HTTP/1.1" 200 OK
+INFO:nano-graphrag:Revtrieved 5 communities
 INFO:nano-graphrag:Grouping to 1 groups for global search
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[DEBUG] 질문: revenue
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+📚 웹 검색 비활성화 - 업로드된 문서에서만 검색합니다
+📚 GraphRAG 모드로 처리 (mode: api, search_type: local, temperature: 0.2, top_k: 30)
+[DEBUG] 질문: nvidia revenue
 [DEBUG] 모드: api
 [DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
-[DEBUG] 그래프 노드 수: 227, 엣지 수: 79
-질문 모드: OpenAI API
-🔍 [DEBUG] query_rag_api.aquery() 완료!
-INFO:     127.0.0.1:60336 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61003 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61004 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61005 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61018 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61019 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61020 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:nano-graphrag:Revtrieved 3 communities
-INFO:nano-graphrag:Grouping to 1 groups for global search
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[DEBUG] 질문: d
-[DEBUG] 모드: api
-[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
-[DEBUG] 그래프 노드 수: 227, 엣지 수: 79
-질문 모드: OpenAI API
-🔍 [DEBUG] query_rag_api.aquery() 완료!
-⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
-💡 더 구체적인 질문을 시도해보세요!
-INFO:     127.0.0.1:61021 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61024 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61025 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61026 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61029 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61031 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61032 - "GET /graph_stats HTTP/1.1" 200 OK
-[DEBUG] 질문: revenue
-[DEBUG] 모드: local
-[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
-[DEBUG] 그래프 노드 수: 227, 엣지 수: 79
-💬 질문 모드: Ollama (로컬)
-INFO:     127.0.0.1:61033 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61050 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61051 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61052 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61055 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61056 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61057 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61058 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61059 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61060 - "GET /graph_stats HTTP/1.1" 200 OK
-INFO:nano-graphrag:Revtrieved 3 communities
-INFO:nano-graphrag:Grouping to 1 groups for global search
-INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
-INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
-[DEBUG] 질문: revenue
-[DEBUG] 모드: local
-[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
-[DEBUG] 그래프 노드 수: 227, 엣지 수: 79
-💬 질문 모드: Ollama (로컬)
-🔍 [DEBUG] query_rag_local.aquery() 완료!
-INFO:     127.0.0.1:61061 - "POST /query HTTP/1.1" 200 OK
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: nvidia revenue...)
+[VALIDATION] Confidence: 75.0%
+[VALIDATION] Valid citations: 1/1
+INFO:     127.0.0.1:59031 - "POST /query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59036 - "GET /health HTTP/1.1" 200 OK

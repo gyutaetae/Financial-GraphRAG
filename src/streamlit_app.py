@@ -343,6 +343,19 @@ def _clean_excerpt(text: str) -> str:
     first = sentence_split[0] if sentence_split else text
     return first[:300]
 
+def _strip_llm_sources_section(text: str) -> str:
+    """
+    LLM이 답변 말미에 'Sources:' / 'References:' 같은 섹션을 텍스트로 붙이는 경우,
+    UI에서 HTML References를 별도로 렌더링하므로 해당 섹션을 제거한다.
+    """
+    if not text:
+        return text
+    # 흔한 패턴: "\n\nSources:\n..." 또는 "\n\nReferences:\n..."
+    m = re.search(r"\n\s*\n\s*(Sources|Source|References|Reference)\s*:\s*\n", text, flags=re.IGNORECASE)
+    if m:
+        return text[:m.start()].rstrip()
+    return text
+
 def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
     """
     답변 텍스트에 인라인 citation 번호를 감지하고, 
@@ -377,19 +390,44 @@ def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
                 tooltip_meta = f"Page {page_num}"
             
             # 툴팁이 포함된 citation 링크 생성
-            tooltip_html = f'''
-            <a href="#source-{cite_num}" class="citation">
-                [{cite_num}]
-                <div class="citation-tooltip">
-                    <div class="tooltip-header">{display_name}</div>
-                    <div class="tooltip-content">{excerpt}...</div>
-                    <div class="tooltip-meta">{tooltip_meta}</div>
-                </div>
-            </a>
-            '''
-            return tooltip_html
+            # NOTE: markdown에서 4칸 이상 들여쓰기는 code block으로 취급될 수 있어
+            # 줄바꿈/들여쓰기를 최소화한다.
+            return (
+                f'<a href="#source-{cite_num}" class="citation">'
+                f'[{cite_num}]'
+                f'<div class="citation-tooltip">'
+                f'<div class="tooltip-header">{display_name}</div>'
+                f'<div class="tooltip-content">{excerpt}...</div>'
+                f'<div class="tooltip-meta">{tooltip_meta}</div>'
+                f'</div>'
+                f'</a>'
+            )
         return match.group(0)
     
+    # #region agent log
+    import json as _json
+    try:
+        cite_matches = list(re.finditer(citation_pattern, answer or ""))
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(_json.dumps({
+                "location": "streamlit_app.py:render_report_with_citations",
+                "message": "render_report_with_citations input",
+                "data": {
+                    "answer_len": len(answer) if answer else 0,
+                    "answer_has_html": ("<a href" in (answer or "")) or ("<div" in (answer or "")),
+                    "answer_has_sources_section": "Sources:" in (answer or "") or "References:" in (answer or ""),
+                    "sources_count": len(sources) if sources else 0,
+                    "citation_count_in_answer": len(cite_matches),
+                },
+                "timestamp": __import__('time').time() * 1000,
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "H3,H7"
+            }) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
     # Citation을 HTML로 변환
     html_answer = re.sub(citation_pattern, replace_citation, answer)
     
@@ -415,13 +453,13 @@ def render_report_with_citations(answer: str, sources: List[Dict]) -> str:
             display_name = file_name
             meta_info = f"Page {page_num}"
         
-        references_html += f'''
-        <div class="reference-item" id="source-{cite_id}">
-            <span class="reference-number">[{cite_id}]</span>
-            <span class="reference-file">{display_name}</span> ({meta_info})
-            <div class="reference-excerpt">"{excerpt}..."</div>
-        </div>
-        '''
+        references_html += (
+            f'<div class="reference-item" id="source-{cite_id}">'
+            f'<span class="reference-number">[{cite_id}]</span> '
+            f'<span class="reference-file">{display_name}</span> ({meta_info})'
+            f'<div class="reference-excerpt">"{excerpt}..."</div>'
+            f'</div>'
+        )
     references_html += '</div>'
     
     # 전체 HTML 조합
@@ -578,7 +616,7 @@ with col2:
         status_text = "Direct Engine Mode"
         status_color = "#28a745"
     else:
-        status_text = "Backend Connected" if server_connected else "Backend Disconnected"
+        status_text = "Connected" if server_connected else "Backend Disconnected"
         status_color = "#28a745" if server_connected else "#dc3545"
     
     status_html = f"""
@@ -591,13 +629,13 @@ with col2:
     st.markdown(status_html, unsafe_allow_html=True)
 
 with col3:
-    if st.button("🔄 Refresh", type="secondary"):
+    if st.button(" Refresh", type="secondary"):
         st.rerun()
 
 st.markdown("---")
 
 # Main Tabs
-tab1, tab2, tab3 = st.tabs(["Query Interface", "Data Ingestion", "Data Sources"])
+tab1, tab2, tab3, tab4 = st.tabs(["Query Interface", "Data Ingestion", "Data Sources", "🏗️ Domain Analysis"])
 
 # Tab 1: Query Interface
 with tab1:
@@ -623,10 +661,20 @@ with tab1:
             help="Check this to allow AI to search the web for real-time information. Otherwise, it will ONLY use your uploaded PDF documents."
         )
         
+        # Multi-Agent 모드 토글
+        use_multi_agent = st.checkbox(
+            "Multi-Agent Analysis Mode",
+            value=False,
+            help="Enable 4-agent collaboration (Master → KB Collector → Analyst → Writer) for complex financial queries."
+        )
+        
         if enable_web_search:
             st.warning("Web search enabled: AI may search the web for LATEST/TODAY information if needed.")
         else:
             st.info("Document-only mode: AI will answer ONLY from your uploaded PDFs.")
+        
+        if use_multi_agent:
+            st.info("Multi-Agent mode: Master → KB Collector → Analyst → Writer pipeline will process your query.")
         
         st.markdown("---")
         
@@ -683,6 +731,7 @@ with tab1:
     st.session_state.temperature = temperature
     st.session_state.top_k = top_k
     st.session_state.enable_web_search = enable_web_search
+    st.session_state.use_multi_agent = use_multi_agent
     
     # Initialize chat history
     if "messages" not in st.session_state:
@@ -752,8 +801,43 @@ with tab1:
                         st.warning(f"Confidence: {confidence:.1%} - Low reliability. Some citations may be invalid.")
                 
                 if sources:
+                    # #region agent log
+                    import json
+                    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"location":"streamlit_app.py:754","message":"Before render_report_with_citations","data":{"content_preview":message["content"][:500],"has_html_in_content":"<a href" in message["content"] or "<div" in message["content"],"sources_count":len(sources)},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H2,H3,H4"})+'\n')
+                    # #endregion
+                    
+                    # LLM이 텍스트로 'Sources:' 섹션을 붙이는 경우 제거 후 렌더링
+                    cleaned_content = _strip_llm_sources_section(message["content"])
                     # Citation과 References가 포함된 보고서 형식
-                    report_html = render_report_with_citations(message["content"], sources)
+                    report_html = render_report_with_citations(cleaned_content, sources)
+                    
+                    # #region agent log
+                    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"location":"streamlit_app.py:757","message":"After render_report_with_citations","data":{"report_html_preview":report_html[:500],"html_length":len(report_html)},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H2,H3"})+'\n')
+                    # #endregion
+                    
+                    # #region agent log
+                    import json as _json
+                    try:
+                        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+                            f.write(_json.dumps({
+                                "location": "streamlit_app.py:769",
+                                "message": "Rendering report_html via st.markdown",
+                                "data": {
+                                    "unsafe_allow_html": True,
+                                    "has_div": "<div" in report_html,
+                                    "has_anchor": "<a href" in report_html,
+                                    "html_len": len(report_html),
+                                },
+                                "timestamp": __import__('time').time() * 1000,
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H3"
+                            }) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
                     st.markdown(report_html, unsafe_allow_html=True)
                     
                     # Popover로 추가 상세 정보 제공 (선택사항)
@@ -769,6 +853,27 @@ with tab1:
                                 claim_text = ev.get("claim_text", "")
                                 citation_ids = ev.get("citation_ids", [])
                                 st.markdown(f"- [{claim_id}] {claim_text} " + " ".join([f"[{cid}]" for cid in citation_ids]))
+                    
+                    # Multi-Agent 추가 정보 표시
+                    if message.get("mode") == "MULTI_AGENT":
+                        # 투자 제언
+                        recommendation = message.get("recommendation")
+                        if recommendation:
+                            st.success(f"Investment Recommendation: {recommendation}")
+                        
+                        # 핵심 인사이트
+                        insights = message.get("insights", [])
+                        if insights:
+                            with st.expander(f"Key Insights ({len(insights)})", expanded=False):
+                                for insight in insights:
+                                    st.markdown(f"- {insight}")
+                        
+                        # 처리 단계
+                        processing_steps = message.get("processing_steps", [])
+                        if processing_steps:
+                            with st.expander("Processing Steps", expanded=False):
+                                for step in processing_steps:
+                                    st.markdown(f"- {step}")
                 else:
                     # 출처 정보가 없으면 기본 형식
                     mode_text = f"<div class='message-mode'>Source: {source_type} | Mode: {message.get('mode', 'N/A')}</div>" if "mode" in message else ""
@@ -805,7 +910,8 @@ with tab1:
                     "temperature": st.session_state.get("temperature", 0.2),
                     "top_k": st.session_state.get("top_k", 30),
                     "search_type": search_type,
-                    "enable_web_search": st.session_state.get("enable_web_search", False)
+                    "enable_web_search": st.session_state.get("enable_web_search", False),
+                    "use_multi_agent": st.session_state.get("use_multi_agent", False)
                 }
                 
                 # 캐시된 경로 우선 (동일 질문/파라미터 반복 시 빠름)
@@ -820,6 +926,17 @@ with tab1:
                     validation = result.get("validation", None)
                     evidence = result.get("evidence", [])
                     
+                    # Multi-Agent 추가 필드
+                    recommendation = result.get("recommendation", None)
+                    insights = result.get("insights", [])
+                    processing_steps = result.get("processing_steps", [])
+                    
+                    # #region agent log
+                    import json
+                    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"location":"streamlit_app.py:827","message":"API response received","data":{"answer_preview":answer[:500],"has_html_in_answer":"<a href" in answer or "<div" in answer,"sources_count":len(sources),"source_type":source_type,"mode":mode},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H4,H5"})+'\n')
+                    # #endregion
+                    
                     # Add assistant response to chat history with sources
                     st.session_state.messages.append({
                         "role": "assistant",
@@ -828,7 +945,10 @@ with tab1:
                         "source_type": source_type,
                         "mode": mode,
                         "validation": validation,
-                        "evidence": evidence
+                        "evidence": evidence,
+                        "recommendation": recommendation,
+                        "insights": insights,
+                        "processing_steps": processing_steps
                     })
                 else:
                     error_msg = result.get("_error", "Unknown error")
@@ -1007,3 +1127,293 @@ with tab3:
                         st.rerun()
     else:
         st.info("No URLs indexed yet.")
+
+
+# Tab 4: Domain Analysis
+with tab4:
+    st.markdown("### 🏗️ Domain Analysis")
+    st.markdown("금융 도메인 특화 분석: Event-Actor-Asset-Factor-Region 관계 탐색")
+    
+    # 분석 유형 선택
+    analysis_type = st.selectbox(
+        "분석 유형",
+        ["Event 인과관계", "Actor 영향력", "Region 이벤트", "Asset 요인 분석"],
+        help="분석하고 싶은 도메인 관계 유형을 선택하세요"
+    )
+    
+    # Event 인과관계 분석
+    if analysis_type == "Event 인과관계":
+        st.markdown("#### Event → Factor → Asset 인과관계 체인")
+        
+        event_name = st.text_input(
+            "Event 이름",
+            placeholder="예: Fed 금리 인상, SVB 파산, 중국 부동산 위기",
+            help="분석하고 싶은 금융 이벤트 이름을 입력하세요"
+        )
+        
+        if st.button("분석", key="analyze_event"):
+            if not event_name:
+                st.warning("Event 이름을 입력해주세요.")
+            else:
+                with st.spinner(f"'{event_name}' 인과관계 분석 중..."):
+                    try:
+                        response = requests.get(
+                            f"{API_BASE_URL}/domain/event/{event_name}",
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            impact_chain = result.get("impact_chain", [])
+                            
+                            if impact_chain:
+                                st.success(f"✅ {len(impact_chain)}개의 인과관계를 발견했습니다!")
+                                
+                                for idx, chain in enumerate(impact_chain, 1):
+                                    with st.expander(f"인과관계 {idx}: {chain['factor']['name']} → {chain['asset']['name']}", expanded=True):
+                                        col1, col2, col3 = st.columns(3)
+                                        
+                                        with col1:
+                                            st.markdown("**Event**")
+                                            st.write(f"이름: {chain['event']['name']}")
+                                            st.write(f"날짜: {chain['event'].get('date', 'N/A')}")
+                                            st.write(f"영향 수준: {chain['event'].get('impact_level', 'N/A')}")
+                                        
+                                        with col2:
+                                            st.markdown("**Factor**")
+                                            st.write(f"이름: {chain['factor']['name']}")
+                                            st.write(f"타입: {chain['factor']['type']}")
+                                        
+                                        with col3:
+                                            st.markdown("**Asset**")
+                                            st.write(f"이름: {chain['asset']['name']}")
+                                            st.write(f"타입: {chain['asset']['type']}")
+                                        
+                                        st.markdown("**영향 분석**")
+                                        direction = chain['impact']['direction']
+                                        magnitude = chain['impact']['magnitude']
+                                        confidence = chain['impact']['confidence']
+                                        
+                                        direction_emoji = "📈" if direction == "Positive" else "📉"
+                                        st.write(f"{direction_emoji} 방향: {direction}")
+                                        st.write(f"📊 크기: {magnitude:.2f}")
+                                        st.write(f"🎯 신뢰도: {confidence:.2f}")
+                            else:
+                                st.info(f"'{event_name}'에 대한 인과관계를 찾을 수 없습니다.")
+                        else:
+                            st.error(f"API 에러: {response.status_code}")
+                    
+                    except Exception as e:
+                        st.error(f"분석 중 에러 발생: {str(e)}")
+    
+    # Actor 영향력 분석
+    elif analysis_type == "Actor 영향력":
+        st.markdown("#### Actor가 관여한 Event와 영향 분석")
+        
+        actor_name = st.text_input(
+            "Actor 이름",
+            placeholder="예: Federal Reserve, 중국 정부, BlackRock",
+            help="분석하고 싶은 주체(기관, 정부, 기업) 이름을 입력하세요"
+        )
+        
+        if st.button("분석", key="analyze_actor"):
+            if not actor_name:
+                st.warning("Actor 이름을 입력해주세요.")
+            else:
+                with st.spinner(f"'{actor_name}' 영향력 분석 중..."):
+                    try:
+                        response = requests.get(
+                            f"{API_BASE_URL}/domain/actor/{actor_name}",
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            influence_data = result.get("influence", [])
+                            
+                            if influence_data:
+                                st.success(f"✅ {len(influence_data)}개의 영향 관계를 발견했습니다!")
+                                
+                                for idx, data in enumerate(influence_data, 1):
+                                    with st.expander(f"영향 {idx}: {data['event']['name']}", expanded=True):
+                                        col1, col2 = st.columns(2)
+                                        
+                                        with col1:
+                                            st.markdown("**Actor 정보**")
+                                            st.write(f"이름: {data['actor']['name']}")
+                                            st.write(f"타입: {data['actor']['type']}")
+                                            st.write(f"역할: {data['actor'].get('role', 'N/A')}")
+                                            st.write(f"영향력: {data['actor'].get('influence_level', 'N/A')}")
+                                            
+                                            st.markdown("**Event 정보**")
+                                            st.write(f"이름: {data['event']['name']}")
+                                            st.write(f"날짜: {data['event'].get('date', 'N/A')}")
+                                        
+                                        with col2:
+                                            st.markdown("**Factor → Asset 영향**")
+                                            st.write(f"Factor: {data['factor']['name']} ({data['factor']['type']})")
+                                            st.write(f"Asset: {data['asset']['name']} ({data['asset']['type']})")
+                                            
+                                            direction = data['impact']['direction']
+                                            magnitude = data['impact']['magnitude']
+                                            direction_emoji = "📈" if direction == "Positive" else "📉"
+                                            st.write(f"{direction_emoji} 영향: {direction} (크기: {magnitude:.2f})")
+                            else:
+                                st.info(f"'{actor_name}'에 대한 영향 관계를 찾을 수 없습니다.")
+                        else:
+                            st.error(f"API 에러: {response.status_code}")
+                    
+                    except Exception as e:
+                        st.error(f"분석 중 에러 발생: {str(e)}")
+    
+    # Region 이벤트 분석
+    elif analysis_type == "Region 이벤트":
+        st.markdown("#### 특정 지역의 Event와 영향받은 Asset")
+        
+        region_name = st.text_input(
+            "Region 이름",
+            placeholder="예: 미국, 중국, 아시아, 신흥시장",
+            help="분석하고 싶은 지역 이름을 입력하세요"
+        )
+        
+        if st.button("분석", key="analyze_region"):
+            if not region_name:
+                st.warning("Region 이름을 입력해주세요.")
+            else:
+                with st.spinner(f"'{region_name}' 이벤트 분석 중..."):
+                    try:
+                        response = requests.get(
+                            f"{API_BASE_URL}/domain/region/{region_name}",
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            regional_events = result.get("events", [])
+                            
+                            if regional_events:
+                                st.success(f"✅ {len(regional_events)}개의 지역 이벤트를 발견했습니다!")
+                                
+                                for idx, event in enumerate(regional_events, 1):
+                                    with st.expander(f"이벤트 {idx}: {event['event']['name']}", expanded=True):
+                                        col1, col2, col3 = st.columns(3)
+                                        
+                                        with col1:
+                                            st.markdown("**Event**")
+                                            st.write(f"이름: {event['event']['name']}")
+                                            st.write(f"날짜: {event['event'].get('date', 'N/A')}")
+                                            st.write(f"영향 수준: {event['event'].get('impact_level', 'N/A')}")
+                                        
+                                        with col2:
+                                            st.markdown("**Region**")
+                                            st.write(f"이름: {event['region']['name']}")
+                                            st.write(f"타입: {event['region']['type']}")
+                                            st.write(f"영향 범위: {event['region'].get('impact_scope', 'N/A')}")
+                                        
+                                        with col3:
+                                            st.markdown("**Factor → Asset**")
+                                            st.write(f"Factor: {event['factor']['name']}")
+                                            st.write(f"Asset: {event['asset']['name']}")
+                                            
+                                            direction = event['impact']['direction']
+                                            magnitude = event['impact']['magnitude']
+                                            direction_emoji = "📈" if direction == "Positive" else "📉"
+                                            st.write(f"{direction_emoji} {direction} ({magnitude:.2f})")
+                            else:
+                                st.info(f"'{region_name}'에 대한 이벤트를 찾을 수 없습니다.")
+                        else:
+                            st.error(f"API 에러: {response.status_code}")
+                    
+                    except Exception as e:
+                        st.error(f"분석 중 에러 발생: {str(e)}")
+    
+    # Asset 요인 분석
+    elif analysis_type == "Asset 요인 분석":
+        st.markdown("#### Asset에 영향을 주는 Factor 분석")
+        
+        asset_name = st.text_input(
+            "Asset 이름",
+            placeholder="예: 금, 미국 부동산, NVDA, 국채",
+            help="분석하고 싶은 자산 이름을 입력하세요"
+        )
+        
+        if st.button("분석", key="analyze_asset"):
+            if not asset_name:
+                st.warning("Asset 이름을 입력해주세요.")
+            else:
+                with st.spinner(f"'{asset_name}' 요인 분석 중..."):
+                    try:
+                        response = requests.get(
+                            f"{API_BASE_URL}/domain/asset/{asset_name}",
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            factors = result.get("factors", [])
+                            
+                            if factors:
+                                st.success(f"✅ {len(factors)}개의 영향 요인을 발견했습니다!")
+                                
+                                for idx, factor_data in enumerate(factors, 1):
+                                    with st.expander(f"요인 {idx}: {factor_data['factor']['name']}", expanded=True):
+                                        col1, col2 = st.columns(2)
+                                        
+                                        with col1:
+                                            st.markdown("**Factor 정보**")
+                                            st.write(f"이름: {factor_data['factor']['name']}")
+                                            st.write(f"타입: {factor_data['factor']['type']}")
+                                            value = factor_data['factor'].get('value')
+                                            if value is not None:
+                                                st.write(f"값: {value}")
+                                        
+                                        with col2:
+                                            st.markdown("**영향 분석**")
+                                            direction = factor_data['impact']['direction']
+                                            magnitude = factor_data['impact']['magnitude']
+                                            confidence = factor_data['impact']['confidence']
+                                            
+                                            direction_emoji = "📈" if direction == "Positive" else "📉"
+                                            st.write(f"{direction_emoji} 방향: {direction}")
+                                            st.write(f"📊 크기: {magnitude:.2f}")
+                                            st.write(f"🎯 신뢰도: {confidence:.2f}")
+                                        
+                                        # 트리거 이벤트
+                                        triggering_events = factor_data.get('triggering_events', [])
+                                        if triggering_events:
+                                            st.markdown("**트리거 이벤트**")
+                                            st.write(", ".join(triggering_events))
+                            else:
+                                st.info(f"'{asset_name}'에 대한 영향 요인을 찾을 수 없습니다.")
+                        else:
+                            st.error(f"API 에러: {response.status_code}")
+                    
+                    except Exception as e:
+                        st.error(f"분석 중 에러 발생: {str(e)}")
+    
+    st.markdown("---")
+    
+    # 도메인 스키마 초기화 버튼
+    st.markdown("### 도메인 스키마 관리")
+    
+    if st.button("🔧 도메인 스키마 초기화", help="Neo4j에 도메인 스키마 Constraint 및 Index 생성"):
+        with st.spinner("도메인 스키마 초기화 중..."):
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/domain/schema/init",
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("status") == "success":
+                        st.success(f"✅ 도메인 스키마 초기화 완료!")
+                        st.write(f"Constraints: {result.get('constraints', 0)}개")
+                        st.write(f"Indexes: {result.get('indexes', 0)}개")
+                    else:
+                        st.error(f"초기화 실패: {result.get('message', 'Unknown error')}")
+                else:
+                    st.error(f"API 에러: {response.status_code}")
+            
+            except Exception as e:
+                st.error(f"초기화 중 에러 발생: {str(e)}")

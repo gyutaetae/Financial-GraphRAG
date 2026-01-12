@@ -272,6 +272,200 @@ class Neo4jDatabase:
             return executor.get_graph_stats()
         finally:
             executor.close()
+    
+    def create_domain_schema(self) -> Dict[str, str]:
+        """
+        도메인 특화 스키마 생성 (constraint, index)
+        Event, Actor, Asset, Factor, Region 노드 타입에 대한 제약조건 및 인덱스 생성
+        
+        Returns:
+            생성 결과 딕셔너리
+        """
+        try:
+            with self.driver.session() as session:
+                # Constraints (노드 고유성)
+                constraints = [
+                    "CREATE CONSTRAINT event_id IF NOT EXISTS FOR (e:Event) REQUIRE e.id IS UNIQUE",
+                    "CREATE CONSTRAINT actor_id IF NOT EXISTS FOR (a:Actor) REQUIRE a.id IS UNIQUE",
+                    "CREATE CONSTRAINT asset_id IF NOT EXISTS FOR (a:Asset) REQUIRE a.id IS UNIQUE",
+                    "CREATE CONSTRAINT factor_id IF NOT EXISTS FOR (f:Factor) REQUIRE f.id IS UNIQUE",
+                    "CREATE CONSTRAINT region_id IF NOT EXISTS FOR (r:Region) REQUIRE r.id IS UNIQUE"
+                ]
+                
+                # Indexes (검색 성능)
+                indexes = [
+                    "CREATE INDEX event_name IF NOT EXISTS FOR (e:Event) ON (e.name)",
+                    "CREATE INDEX event_date IF NOT EXISTS FOR (e:Event) ON (e.date)",
+                    "CREATE INDEX actor_type IF NOT EXISTS FOR (a:Actor) ON (a.type)",
+                    "CREATE INDEX actor_name IF NOT EXISTS FOR (a:Actor) ON (a.name)",
+                    "CREATE INDEX asset_type IF NOT EXISTS FOR (a:Asset) ON (a.type)",
+                    "CREATE INDEX asset_name IF NOT EXISTS FOR (a:Asset) ON (a.name)",
+                    "CREATE INDEX factor_type IF NOT EXISTS FOR (f:Factor) ON (f.type)",
+                    "CREATE INDEX factor_name IF NOT EXISTS FOR (f:Factor) ON (f.name)",
+                    "CREATE INDEX region_type IF NOT EXISTS FOR (r:Region) ON (r.type)",
+                    "CREATE INDEX region_name IF NOT EXISTS FOR (r:Region) ON (r.name)"
+                ]
+                
+                print("🏗️  도메인 스키마 생성 중...")
+                
+                # Constraints 생성
+                for query in constraints:
+                    try:
+                        session.run(query)
+                        print(f"  ✅ Constraint 생성: {query.split('FOR')[1].split('REQUIRE')[0].strip()}")
+                    except Exception as e:
+                        print(f"  ⚠️  Constraint 생성 실패 (이미 존재할 수 있음): {e}")
+                
+                # Indexes 생성
+                for query in indexes:
+                    try:
+                        session.run(query)
+                        print(f"  ✅ Index 생성: {query.split('FOR')[1].split('ON')[0].strip()}")
+                    except Exception as e:
+                        print(f"  ⚠️  Index 생성 실패 (이미 존재할 수 있음): {e}")
+                
+                print("✅ 도메인 스키마 생성 완료!")
+                
+                return {
+                    "status": "success",
+                    "message": "도메인 스키마가 성공적으로 생성되었습니다",
+                    "constraints": len(constraints),
+                    "indexes": len(indexes)
+                }
+                
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"도메인 스키마 생성 중 에러: {str(e)}"
+            }
+    
+    def create_domain_node(
+        self,
+        node_type: str,
+        node_id: str,
+        node_data: Dict[str, str | float | int]
+    ) -> None:
+        """
+        도메인 특화 노드 생성 (Event, Actor, Asset, Factor, Region)
+        
+        Args:
+            node_type: 노드 타입 (Event, Actor, Asset, Factor, Region)
+            node_id: 노드 ID
+            node_data: 노드 속성 딕셔너리
+        """
+        # 노드 타입 검증
+        valid_types = ["Event", "Actor", "Asset", "Factor", "Region"]
+        if node_type not in valid_types:
+            raise ValueError(f"Invalid node type: {node_type}. Must be one of {valid_types}")
+        
+        # 동적 쿼리 생성 (노드 타입에 따라)
+        query = f"""
+        MERGE (n:{node_type} {{id: $node_id}})
+        SET n += $properties
+        """
+        
+        # 타입 안전성 보장
+        properties = {
+            "name": str(node_data.get("name", "")),
+            "source": str(node_data.get("source", ""))
+        }
+        
+        # 노드 타입별 추가 속성
+        if node_type == "Event":
+            properties.update({
+                "date": str(node_data.get("date", "")),
+                "description": str(node_data.get("description", "")),
+                "impact_level": str(node_data.get("impact_level", ""))
+            })
+        elif node_type == "Actor":
+            properties.update({
+                "type": str(node_data.get("type", "")),
+                "role": str(node_data.get("role", ""))
+            })
+        elif node_type == "Asset":
+            properties.update({
+                "type": str(node_data.get("type", "")),
+                "ticker": str(node_data.get("ticker", ""))
+            })
+        elif node_type == "Factor":
+            properties.update({
+                "type": str(node_data.get("type", "")),
+                "value": float(node_data.get("value", 0.0)) if node_data.get("value") else None,
+                "unit": str(node_data.get("unit", ""))
+            })
+        elif node_type == "Region":
+            properties.update({
+                "type": str(node_data.get("type", "")),
+                "code": str(node_data.get("code", ""))
+            })
+        
+        # 쿼리 실행
+        with self.driver.session() as session:
+            session.run(query, node_id=str(node_id), properties=properties)
+    
+    def create_domain_relationship(
+        self,
+        rel_type: str,
+        source_id: str,
+        target_id: str,
+        source_label: str,
+        target_label: str,
+        rel_data: Dict[str, str | float | int]
+    ) -> None:
+        """
+        도메인 특화 관계 생성 (TRIGGERS, IMPACTS, INVOLVED_IN, LOCATED_IN)
+        
+        Args:
+            rel_type: 관계 타입
+            source_id: 시작 노드 ID
+            target_id: 끝 노드 ID
+            source_label: 시작 노드 라벨
+            target_label: 끝 노드 라벨
+            rel_data: 관계 속성 딕셔너리
+        """
+        # 관계 타입 검증
+        valid_rels = ["TRIGGERS", "IMPACTS", "INVOLVED_IN", "LOCATED_IN"]
+        if rel_type not in valid_rels:
+            raise ValueError(f"Invalid relationship type: {rel_type}. Must be one of {valid_rels}")
+        
+        query = f"""
+        MATCH (a:{source_label} {{id: $source_id}})
+        MATCH (b:{target_label} {{id: $target_id}})
+        MERGE (a)-[r:{rel_type}]->(b)
+        SET r += $properties
+        """
+        
+        # 타입 안전성 보장
+        properties = {
+            "source": str(rel_data.get("source", "")),
+            "timestamp": str(rel_data.get("timestamp", ""))
+        }
+        
+        # 관계 타입별 추가 속성
+        if rel_type == "TRIGGERS":
+            properties["confidence"] = float(rel_data.get("confidence", 0.0)) if rel_data.get("confidence") else None
+        elif rel_type == "IMPACTS":
+            properties.update({
+                "direction": str(rel_data.get("direction", "")),
+                "magnitude": float(rel_data.get("magnitude", 0.0)) if rel_data.get("magnitude") else None,
+                "confidence": float(rel_data.get("confidence", 0.0)) if rel_data.get("confidence") else None
+            })
+        elif rel_type == "INVOLVED_IN":
+            properties.update({
+                "role": str(rel_data.get("role", "")),
+                "influence_level": str(rel_data.get("influence_level", ""))
+            })
+        elif rel_type == "LOCATED_IN":
+            properties["impact_scope"] = str(rel_data.get("impact_scope", ""))
+        
+        # 쿼리 실행
+        with self.driver.session() as session:
+            session.run(
+                query,
+                source_id=str(source_id),
+                target_id=str(target_id),
+                properties=properties
+            )
 
 
     def parse_pdf_to_text(self, pdf_path: str) -> str:

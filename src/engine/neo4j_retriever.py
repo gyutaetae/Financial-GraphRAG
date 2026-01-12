@@ -19,6 +19,236 @@ from models.neo4j_models import Neo4jQueryResult
 from entity_resolver import EntityResolver
 
 
+# 도메인 특화 쿼리 함수들
+def query_event_impact_chain(executor: QueryExecutor, event_name: str) -> List[Dict]:
+    """
+    Event → Factor → Asset 인과관계 체인 조회
+    
+    Args:
+        executor: QueryExecutor 인스턴스
+        event_name: Event 이름
+    
+    Returns:
+        인과관계 체인 리스트
+    """
+    query = """
+    MATCH (e:Event {name: $event_name})-[:TRIGGERS]->(f:Factor)
+    MATCH (f)-[i:IMPACTS]->(a:Asset)
+    RETURN e.name as event_name, e.date as event_date, e.impact_level as impact_level,
+           f.name as factor_name, f.type as factor_type,
+           i.direction as impact_direction, i.magnitude as impact_magnitude, i.confidence as impact_confidence,
+           a.name as asset_name, a.type as asset_type
+    ORDER BY i.magnitude DESC
+    LIMIT 10
+    """
+    
+    try:
+        result = executor.execute_query(query, {"event_name": event_name})
+        
+        impact_chain = []
+        for record in result.records:
+            impact_chain.append({
+                "event": {
+                    "name": record.get("event_name", ""),
+                    "date": record.get("event_date", ""),
+                    "impact_level": record.get("impact_level", "")
+                },
+                "factor": {
+                    "name": record.get("factor_name", ""),
+                    "type": record.get("factor_type", "")
+                },
+                "impact": {
+                    "direction": record.get("impact_direction", ""),
+                    "magnitude": record.get("impact_magnitude", 0.0),
+                    "confidence": record.get("impact_confidence", 0.0)
+                },
+                "asset": {
+                    "name": record.get("asset_name", ""),
+                    "type": record.get("asset_type", "")
+                }
+            })
+        
+        return impact_chain
+    
+    except Exception as e:
+        print(f"⚠️  Event impact chain 조회 중 에러: {e}")
+        return []
+
+
+def query_actor_influence(executor: QueryExecutor, actor_name: str) -> List[Dict]:
+    """
+    Actor가 관여한 Event와 그 영향 조회
+    
+    Args:
+        executor: QueryExecutor 인스턴스
+        actor_name: Actor 이름
+    
+    Returns:
+        Actor 영향력 리스트
+    """
+    query = """
+    MATCH (actor:Actor {name: $actor_name})-[inv:INVOLVED_IN]->(e:Event)
+    MATCH (e)-[:TRIGGERS]->(f:Factor)-[i:IMPACTS]->(a:Asset)
+    RETURN actor.name as actor_name, actor.type as actor_type,
+           inv.role as actor_role, inv.influence_level as influence_level,
+           e.name as event_name, e.date as event_date,
+           f.name as factor_name, f.type as factor_type,
+           i.direction as impact_direction, i.magnitude as impact_magnitude,
+           a.name as asset_name, a.type as asset_type
+    ORDER BY e.date DESC
+    LIMIT 20
+    """
+    
+    try:
+        result = executor.execute_query(query, {"actor_name": actor_name})
+        
+        influence_data = []
+        for record in result.records:
+            influence_data.append({
+                "actor": {
+                    "name": record.get("actor_name", ""),
+                    "type": record.get("actor_type", ""),
+                    "role": record.get("actor_role", ""),
+                    "influence_level": record.get("influence_level", "")
+                },
+                "event": {
+                    "name": record.get("event_name", ""),
+                    "date": record.get("event_date", "")
+                },
+                "factor": {
+                    "name": record.get("factor_name", ""),
+                    "type": record.get("factor_type", "")
+                },
+                "impact": {
+                    "direction": record.get("impact_direction", ""),
+                    "magnitude": record.get("impact_magnitude", 0.0)
+                },
+                "asset": {
+                    "name": record.get("asset_name", ""),
+                    "type": record.get("asset_type", "")
+                }
+            })
+        
+        return influence_data
+    
+    except Exception as e:
+        print(f"⚠️  Actor influence 조회 중 에러: {e}")
+        return []
+
+
+def query_regional_events(executor: QueryExecutor, region_name: str) -> List[Dict]:
+    """
+    특정 지역의 Event와 영향받은 Asset 조회
+    
+    Args:
+        executor: QueryExecutor 인스턴스
+        region_name: Region 이름
+    
+    Returns:
+        지역별 Event 리스트
+    """
+    query = """
+    MATCH (e:Event)-[loc:LOCATED_IN]->(r:Region {name: $region_name})
+    MATCH (e)-[:TRIGGERS]->(f:Factor)-[i:IMPACTS]->(a:Asset)
+    RETURN e.name as event_name, e.date as event_date, e.impact_level as impact_level,
+           loc.impact_scope as impact_scope,
+           r.name as region_name, r.type as region_type,
+           f.name as factor_name, f.type as factor_type,
+           i.direction as impact_direction, i.magnitude as impact_magnitude,
+           a.name as asset_name, a.type as asset_type
+    ORDER BY e.date DESC
+    LIMIT 15
+    """
+    
+    try:
+        result = executor.execute_query(query, {"region_name": region_name})
+        
+        regional_events = []
+        for record in result.records:
+            regional_events.append({
+                "event": {
+                    "name": record.get("event_name", ""),
+                    "date": record.get("event_date", ""),
+                    "impact_level": record.get("impact_level", "")
+                },
+                "region": {
+                    "name": record.get("region_name", ""),
+                    "type": record.get("region_type", ""),
+                    "impact_scope": record.get("impact_scope", "")
+                },
+                "factor": {
+                    "name": record.get("factor_name", ""),
+                    "type": record.get("factor_type", "")
+                },
+                "impact": {
+                    "direction": record.get("impact_direction", ""),
+                    "magnitude": record.get("impact_magnitude", 0.0)
+                },
+                "asset": {
+                    "name": record.get("asset_name", ""),
+                    "type": record.get("asset_type", "")
+                }
+            })
+        
+        return regional_events
+    
+    except Exception as e:
+        print(f"⚠️  Regional events 조회 중 에러: {e}")
+        return []
+
+
+def query_asset_factors(executor: QueryExecutor, asset_name: str) -> List[Dict]:
+    """
+    특정 Asset에 영향을 주는 Factor들 조회
+    
+    Args:
+        executor: QueryExecutor 인스턴스
+        asset_name: Asset 이름
+    
+    Returns:
+        Asset에 영향을 주는 Factor 리스트
+    """
+    query = """
+    MATCH (f:Factor)-[i:IMPACTS]->(a:Asset {name: $asset_name})
+    OPTIONAL MATCH (e:Event)-[:TRIGGERS]->(f)
+    RETURN f.name as factor_name, f.type as factor_type, f.value as factor_value,
+           i.direction as impact_direction, i.magnitude as impact_magnitude, i.confidence as impact_confidence,
+           a.name as asset_name, a.type as asset_type,
+           collect(DISTINCT e.name) as triggering_events
+    ORDER BY i.magnitude DESC
+    LIMIT 10
+    """
+    
+    try:
+        result = executor.execute_query(query, {"asset_name": asset_name})
+        
+        factors = []
+        for record in result.records:
+            factors.append({
+                "factor": {
+                    "name": record.get("factor_name", ""),
+                    "type": record.get("factor_type", ""),
+                    "value": record.get("factor_value")
+                },
+                "impact": {
+                    "direction": record.get("impact_direction", ""),
+                    "magnitude": record.get("impact_magnitude", 0.0),
+                    "confidence": record.get("impact_confidence", 0.0)
+                },
+                "asset": {
+                    "name": record.get("asset_name", ""),
+                    "type": record.get("asset_type", "")
+                },
+                "triggering_events": record.get("triggering_events", [])
+            })
+        
+        return factors
+    
+    except Exception as e:
+        print(f"⚠️  Asset factors 조회 중 에러: {e}")
+        return []
+
+
 @dataclass(frozen=True)
 class EvidenceSource:
     id: int

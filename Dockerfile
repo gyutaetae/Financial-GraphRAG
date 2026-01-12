@@ -26,8 +26,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 COPY data/ ./data/
+COPY mcp-config.json .
+COPY data_sources.json .
 COPY README.md .
-COPY schema.md .
+COPY SCHEMA.md .
 
 # Create necessary directories
 RUN mkdir -p logs storage/graph_storage
