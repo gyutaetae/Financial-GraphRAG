@@ -46,10 +46,11 @@ class AnalystAgent(BaseAgent):
 }
 """
     
-    def __init__(self, mcp_manager=None):
+    def __init__(self, mcp_manager=None, neo4j_db=None):
         """
         Args:
             mcp_manager: MCP Manager 인스턴스 (None이면 MCP 도구 비활성화)
+            neo4j_db: Neo4jDatabase 인스턴스 (Shared Memory용)
         """
         super().__init__(
             name="Analyst",
@@ -57,6 +58,7 @@ class AnalystAgent(BaseAgent):
             temperature=0.1  # 정확한 분석을 위해 낮은 온도
         )
         self._mcp_manager = mcp_manager
+        self._neo4j_db = neo4j_db
         self._yahoo_tool = None
     
     async def execute(self, context: AgentContext) -> AgentContext:
@@ -94,7 +96,23 @@ class AnalystAgent(BaseAgent):
                 )
                 validation_result = self._merge_verification(validation_result, verified_result)
             
-            # 3. 결과를 컨텍스트에 반영
+            # 3. Neo4j에서 추가 컨텍스트 읽기 (LangGraph 워크플로우)
+            if self._neo4j_db and context.neo4j_keys:
+                additional_sources = await self._read_from_neo4j(context)
+                if additional_sources:
+                    context.sources.extend(additional_sources)
+                    self._log(f"Neo4j에서 {len(additional_sources)}개 추가 소스 로드")
+            
+            # 4. 정보 충분성 판단
+            sufficiency_check = await self._check_sufficiency(context)
+            context.needs_more_info = not sufficiency_check["is_sufficient"]
+            
+            if context.needs_more_info:
+                context.add_step(
+                    f"{self.name}: 정보 부족 감지 - {sufficiency_check['reason']}"
+                )
+            
+            # 5. 결과를 컨텍스트에 반영
             context.validated_data = validation_result.get("validated_data", [])
             context.removed_claims = validation_result.get("removed_claims", [])
             context.insights = validation_result.get("insights", [])
@@ -102,7 +120,7 @@ class AnalystAgent(BaseAgent):
             
             self._log(
                 f"분석 완료: {len(context.validated_data)}개 검증된 주장, "
-                f"신뢰도={context.confidence:.2f}"
+                f"신뢰도={context.confidence:.2f}, 충분성={not context.needs_more_info}"
             )
             context.add_step(
                 f"{self.name}: {len(context.validated_data)}개 주장 검증 완료 "
@@ -351,3 +369,96 @@ JSON 형식으로 응답:
         original["insights"] = insights
         
         return original
+    
+    async def _read_from_neo4j(self, context: AgentContext) -> List[Dict[str, Any]]:
+        """
+        Neo4j Shared Memory에서 데이터 읽기
+        
+        Args:
+            context: 공유 컨텍스트
+            
+        Returns:
+            추가 소스 리스트
+        """
+        try:
+            import json
+            additional_sources = []
+            
+            for key in context.neo4j_keys:
+                # Neo4j에서 노드 조회
+                with self._neo4j_db.driver.session() as session:
+                    result = session.run(
+                        "MATCH (n {id: $key}) RETURN n",
+                        key=key
+                    )
+                    
+                    for record in result:
+                        node = record["n"]
+                        data_str = node.get("data", "{}")
+                        data = json.loads(data_str)
+                        
+                        # 소스 추출
+                        sources = data.get("sources", [])
+                        additional_sources.extend(sources)
+            
+            return additional_sources
+            
+        except Exception as e:
+            self._log(f"Neo4j 읽기 실패: {e}")
+            return []
+    
+    async def _check_sufficiency(self, context: AgentContext) -> Dict[str, Any]:
+        """
+        정보 충분성 판단
+        
+        Args:
+            context: 공유 컨텍스트
+            
+        Returns:
+            {
+                "is_sufficient": True/False,
+                "reason": "판단 근거",
+                "missing_aspects": ["부족한 정보 항목"]
+            }
+        """
+        # 기본 휴리스틱
+        if len(context.sources) < 3:
+            return {
+                "is_sufficient": False,
+                "reason": f"소스 개수 부족 ({len(context.sources)}/3)",
+                "missing_aspects": ["more_sources"]
+            }
+        
+        if context.confidence < 0.6:
+            return {
+                "is_sufficient": False,
+                "reason": f"신뢰도 낮음 ({context.confidence:.0%})",
+                "missing_aspects": ["higher_quality_sources"]
+            }
+        
+        # 서브태스크 기반 판단
+        if context.subtasks:
+            subtask_coverage = {}
+            for source in context.sources:
+                subtask_id = source.get("subtask_id")
+                if subtask_id:
+                    subtask_coverage[subtask_id] = subtask_coverage.get(subtask_id, 0) + 1
+            
+            missing_subtasks = []
+            for subtask in context.subtasks:
+                if subtask["id"] not in subtask_coverage or subtask_coverage[subtask["id"]] < 2:
+                    missing_subtasks.append(subtask["id"])
+            
+            if missing_subtasks:
+                return {
+                    "is_sufficient": False,
+                    "reason": f"서브태스크 {missing_subtasks} 정보 부족",
+                    "missing_aspects": [f"subtask_{sid}" for sid in missing_subtasks]
+                }
+        
+        # 충분함
+        return {
+            "is_sufficient": True,
+            "reason": "충분한 소스와 신뢰도 확보",
+            "missing_aspects": []
+        }

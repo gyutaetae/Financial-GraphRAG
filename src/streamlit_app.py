@@ -11,10 +11,43 @@ from typing import List, Dict
 from dotenv import load_dotenv
 load_dotenv()
 
-# 환경 변수 읽기
+# Health Check 모듈 임포트
+try:
+    from health_check import HealthChecker
+    HEALTH_CHECK_AVAILABLE = True
+except ImportError:
+    HEALTH_CHECK_AVAILABLE = False
+    HealthChecker = None
+
+# 환경 변수 읽기 (하이브리드 클라우드 지원)
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
+# Neo4j 연결 체크 함수 (레거시 호환)
+def check_neo4j_connection():
+    """Neo4j 데이터베이스 연결 상태 확인"""
+    if HEALTH_CHECK_AVAILABLE:
+        checker = HealthChecker()
+        return checker.check_neo4j()
+    
+    # Fallback: 기본 체크
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        driver.verify_connectivity()
+        driver.close()
+        return True, "✅ Neo4j Connected"
+    except Exception as e:
+        error_msg = str(e)
+        if "authentication" in error_msg.lower():
+            return False, "❌ Neo4j 인증 실패"
+        elif "dns" in error_msg.lower():
+            return False, "❌ Neo4j 주소 오류"
+        else:
+            return False, f"❌ Neo4j: {error_msg[:50]}"
 
 # 현재 파일의 폴더 경로를 추가해요!
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -571,7 +604,11 @@ def cached_query(api_base_url: str, payload_json: str) -> Dict:
             return {"_error": f"엔진 실행 오류: {str(e)}"}
     
     # 로컬: FastAPI 서버 사용
-    r = requests.post(f"{api_base_url}/query", json=payload, timeout=120)
+    # Agentic Workflow 모드 확인
+    use_agentic = payload.get("use_agentic_workflow", False)
+    endpoint = "/agentic-query" if use_agentic else "/query"
+    
+    r = requests.post(f"{api_base_url}{endpoint}", json=payload, timeout=180)
     if r.status_code == 200:
         return r.json()
     return {"_error": f"Error {r.status_code}: {r.text}"}
@@ -594,10 +631,17 @@ with col2:
         status_text = "Connected" if server_connected else "Backend Disconnected"
         status_color = "#28a745" if server_connected else "#dc3545"
     
+    # Neo4j 연결 상태 체크
+    neo4j_connected, neo4j_msg = check_neo4j_connection()
+    neo4j_color = "#28a745" if neo4j_connected else "#ffc107"
+    
     status_html = f"""
     <div style="text-align: right; padding: 10px;">
         <span style="color: {status_color}; font-size: 12px;">
             ● {status_text}
+        </span><br>
+        <span style="color: {neo4j_color}; font-size: 10px;">
+            {neo4j_msg}
         </span>
     </div>
     """
@@ -621,7 +665,7 @@ with tab1:
         # LLM Mode Selection
         llm_mode = st.radio(
             "LLM Mode",
-            ["API (OpenAI)", "LOCAL (Ollama)"],
+            ["API (OpenAI)", "LOCAL (qwen2.5-coder-3B)"],
             index=0,
             help="API: Use OpenAI GPT-4o-mini (faster, more accurate) | LOCAL: Use Ollama Qwen2.5-Coder-3B (private, offline)",
             horizontal=True
@@ -659,6 +703,14 @@ with tab1:
             help="Enable 4-agent collaboration (Master → KB Collector → Analyst → Writer) for complex financial queries."
         )
         
+        # Agentic Workflow 모드 토글
+        use_agentic_workflow = st.checkbox(
+            "Agentic Workflow (LangGraph)",
+            value=False,
+            help="Enable LangGraph-based workflow: Planner → Collector → Analyst → Writer with feedback loop and reasoning path."
+        )
+        st.session_state["use_agentic_workflow"] = use_agentic_workflow
+        
         if enable_web_search:
             st.warning("Web search enabled: AI may search the web for LATEST/TODAY information if needed.")
         else:
@@ -666,6 +718,9 @@ with tab1:
         
         if use_multi_agent:
             st.info("Multi-Agent mode: Master → KB Collector → Analyst → Writer pipeline will process your query.")
+        
+        if use_agentic_workflow:
+            st.success("Agentic Workflow: LangGraph orchestration with automatic feedback loop and reasoning path tracking.")
         
         st.markdown("---")
         
@@ -816,11 +871,33 @@ with tab1:
                                 st.markdown(f"- [{claim_id}] {claim_text} " + " ".join([f"[{cid}]" for cid in citation_ids]))
                     
                     # Multi-Agent 추가 정보 표시
-                    if message.get("mode") == "MULTI_AGENT":
+                    if message.get("mode") in ["MULTI_AGENT", "AGENTIC_WORKFLOW"]:
                         # 투자 제언
                         recommendation = message.get("recommendation")
                         if recommendation:
                             st.success(f"Investment Recommendation: {recommendation}")
+                        
+                        # Agentic Workflow 추가 정보
+                        if message.get("mode") == "AGENTIC_WORKFLOW":
+                            # 추론 경로
+                            reasoning_path = message.get("reasoning_path", [])
+                            if reasoning_path:
+                                with st.expander("Reasoning Path", expanded=True):
+                                    for i, step in enumerate(reasoning_path, 1):
+                                        st.markdown(f"{i}. {step}")
+                            
+                            # 서브태스크
+                            subtasks = message.get("subtasks", [])
+                            if subtasks:
+                                with st.expander(f"Subtasks ({len(subtasks)})", expanded=False):
+                                    for subtask in subtasks:
+                                        st.markdown(f"**{subtask.get('id')}. {subtask.get('task')}** (Target: {subtask.get('target', 'N/A')})")
+                                        st.markdown(f"   Priority: {subtask.get('priority', 'N/A')} | Reasoning: {subtask.get('reasoning', 'N/A')}")
+                            
+                            # 반복 횟수
+                            iteration_count = message.get("iteration_count", 0)
+                            if iteration_count > 0:
+                                st.info(f"Feedback Loop: {iteration_count} iteration(s)")
                         
                         # 핵심 인사이트
                         insights = message.get("insights", [])
@@ -873,7 +950,8 @@ with tab1:
                     "top_k": st.session_state.get("top_k", 30),
                     "search_type": search_type,
                     "enable_web_search": st.session_state.get("enable_web_search", False),
-                    "use_multi_agent": st.session_state.get("use_multi_agent", False)
+                    "use_multi_agent": st.session_state.get("use_multi_agent", False),
+                    "use_agentic_workflow": st.session_state.get("use_agentic_workflow", False)
                 }
                 
                 # 캐시된 경로 우선 (동일 질문/파라미터 반복 시 빠름)
@@ -893,6 +971,11 @@ with tab1:
                     insights = result.get("insights", [])
                     processing_steps = result.get("processing_steps", [])
                     
+                    # Agentic Workflow 추가 필드
+                    reasoning_path = result.get("reasoning_path", [])
+                    subtasks = result.get("subtasks", [])
+                    iteration_count = result.get("iteration_count", 0)
+                    
                     # Add assistant response to chat history with sources
                     st.session_state.messages.append({
                         "role": "assistant",
@@ -904,7 +987,10 @@ with tab1:
                         "evidence": evidence,
                         "recommendation": recommendation,
                         "insights": insights,
-                        "processing_steps": processing_steps
+                        "processing_steps": processing_steps,
+                        "reasoning_path": reasoning_path,
+                        "subtasks": subtasks,
+                        "iteration_count": iteration_count
                     })
                 else:
                     error_msg = result.get("_error", "Unknown error")

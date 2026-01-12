@@ -1,4 +1,4 @@
-INFO:     Started server process [51834]
+INFO:     Started server process [68465]
 INFO:     Waiting for application startup.
 INFO:nano-graphrag:Load KV full_docs with 9 data
 INFO:nano-graphrag:Load KV text_chunks with 9 data
@@ -24,19 +24,18 @@ INFO:nano-vectordb:Init {'embedding_dim': 1536, 'metric': 'cosine', 'storage_fil
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ==================================================
-📋 VIK AI Hybrid GraphRAG 설정
+📋 VIK AI Hybrid GraphRAG Configuration
 ==================================================
-🔧 실행 모드: API
-📁 작업 디렉토리: /tmp/graph_storage_hybrid
-🤖 LLM 모델: gpt-4o-mini
-🔢 Embedding 모델: text-embedding-3-small
-📏 Embedding 차원: 1536
-🔑 OpenAI API 키: ✅ 설정됨
-🗄️  Neo4j 자동 업로드: ❌ 비활성화
-🔌 MCP Lazy Load: ✅ 활성화
-🔍 Tavily Search API: ✅ 설정됨
-🏗️  도메인 스키마: ✅ 활성화
-🤖 분류 모델: gpt-4o-mini
+🔧 Mode: API
+📁 Working Dir: /tmp/graph_storage_hybrid
+🤖 LLM: gpt-4o-mini
+🔢 Embedding: text-embedding-3-small (dim: 1536)
+🔑 OpenAI API: ✅
+🗄️  Neo4j Auto Export: ❌
+🔌 MCP Lazy Load: ✅
+🔍 Tavily API: ✅
+🏗️  Domain Schema: ✅
+🤖 Classification Model: gpt-4o-mini
 ==================================================
 🚀 HybridGraphRAGEngine 초기화 중...
 HybridGraphRAGEngine 초기화 완료!
@@ -45,31 +44,473 @@ HybridGraphRAGEngine 초기화 완료!
 질문 모드: API 또는 LOCAL 선택 가능
 도메인 스키마: 활성화
 ✅ HybridGraphRAGEngine 준비 완료!
-🚀 MCP Manager 초기화 중...
+🔧 MCP Manager 초기화 중...
 ✅ MCP Manager 초기화 (lazy_load=True)
-✅ MCP Manager 준비 완료 (lazy load 모드)
-INFO:     127.0.0.1:59010 - "GET /health HTTP/1.1" 200 OK
+✅ MCP Manager 준비 완료!
+🔧 Neo4j Database 초기화 중...
+✅ Neo4j 연결 성공! URI: neo4j+s://your-instance.databases.neo4j.io
+✅ Neo4j Database 준비 완료!
+🔧 Agentic Workflow 초기화 중...
+✅ Agentic Workflow 준비 완료!
+INFO:     127.0.0.1:56892 - "GET /health HTTP/1.1" 200 OK
 INFO:nano-graphrag:Revtrieved 5 communities
 INFO:nano-graphrag:Grouping to 1 groups for global search
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:engine.executor:Neo4j 연결 성공: neo4j+s://your-instance.databases.neo4j.io
 ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 📚 웹 검색 비활성화 - 업로드된 문서에서만 검색합니다
 📚 GraphRAG 모드로 처리 (mode: api, search_type: local, temperature: 0.2, top_k: 30)
-[DEBUG] 질문: nvidia
+[DEBUG] 질문: gold value
 [DEBUG] 모드: api
 [DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
 [DEBUG] 그래프 노드 수: 340, 엣지 수: 134
 질문 모드: OpenAI API (top_k: 30)
 🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
 [Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
-[DEBUG] 9개의 출처 추출 완료 (질문: nvidia...)
+[DEBUG] 9개의 출처 추출 완료 (질문: gold value...)
 [VALIDATION] Confidence: 100.0%
 [VALIDATION] Valid citations: 0/0
 [WARNING] Low confidence or invalid response, replacing with 'no info' response
-INFO:     127.0.0.1:59020 - "POST /query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56900 - "POST /query HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Planner context flushed | Freed: -73.1MB | Usage: 81.1%
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:agents.memory_manager:[MemoryManager] Collector context flushed | Freed: -6.6MB | Usage: 80.6%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Analyst context flushed | Freed: -0.6MB | Usage: 80.7%
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:agents.memory_manager:[MemoryManager] Collector context flushed | Freed: -10.9MB | Usage: 81.2%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+
+============================================================
+[Agentic Workflow] 질문: gold value
+============================================================
+
+
+============================================================
+Agentic Workflow 시작: gold value
+Session ID: e7a64074
+============================================================
+
+[Planner] 질문 분해 시작...
+[Planner] 질문 분석 시작: gold value
+[Planner] 서브태스크 3개 생성 완료
+[Planner] 3개 서브태스크 생성 완료
+[Collector] 정보 수집 시작 (반복 1회)...
+[KB Collector] 지식 수집 시작: 'gold value'
+[KB Collector] 3개 서브태스크 기반 수집
+[KB Collector] 서브태스크 1: 최근 글로벌 금 가격 변동 추세 분석
+[DEBUG] 질문: 최근 글로벌 금 가격 변동 추세 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 최근 글로벌 금 가격 변동 추세 분석...)
+[KB Collector] Tavily Search 조회: 최근 글로벌 금 가격 변동 추세 분석
+🚀 MCP 서버 시작 중: tavily-search
+✅ MCP 서버 시작 완료: tavily-search
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '최근 글로벌 금 가격 변동 추세 분석', 'max_results': 5})
+[KB Collector] 서브태스크 2: 주요 경제지표와 금 가격의 상관관계 분석
+[DEBUG] 질문: 주요 경제지표와 금 가격의 상관관계 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 주요 경제지표와 금 가격의 상관관계 분석...)
+[KB Collector] Tavily Search 조회: 주요 경제지표와 금 가격의 상관관계 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '주요 경제지표와 금 가격의 상관관계 분석', 'max_results': 5})
+[KB Collector] 서브태스크 3: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+[DEBUG] 질문: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 지정학적 이벤트가 금 가격에 미치는 영향 평가...)
+[KB Collector] Tavily Search 조회: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '지정학적 이벤트가 금 가격에 미치는 영향 평가', 'max_results': 5})
+[KB Collector] Neo4j 저장 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[KB Collector] 수집 완료: 30개 소스, 백엔드=kv_fallback
+[Collector] 30개 소스 수집 완료
+[Analyst] 데이터 검증 시작...
+[Analyst] 분석 시작: 30개 소스
+[Analyst] LLM 응답 JSON 파싱 실패, 기본 구조 반환
+[Analyst] Yahoo Finance로 수치 재검증
+[Analyst] 티커를 추출할 수 없어 Yahoo Finance 검증 스킵
+[Analyst] 분석 완료: 5개 검증된 주장, 신뢰도=0.70, 충분성=False
+[Analyst] 검증 완료 (신뢰도: 70%, 충분성: False)
+[Router] 정보 부족 감지 → Collector 재실행
+[Collector] 정보 수집 시작 (반복 2회)...
+[KB Collector] 지식 수집 시작: 'gold value'
+[KB Collector] 3개 서브태스크 기반 수집
+[KB Collector] 서브태스크 1: 최근 글로벌 금 가격 변동 추세 분석
+[DEBUG] 질문: 최근 글로벌 금 가격 변동 추세 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 최근 글로벌 금 가격 변동 추세 분석...)
+[KB Collector] Tavily Search 조회: 최근 글로벌 금 가격 변동 추세 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '최근 글로벌 금 가격 변동 추세 분석', 'max_results': 5})
+[KB Collector] 서브태스크 2: 주요 경제지표와 금 가격의 상관관계 분석
+[DEBUG] 질문: 주요 경제지표와 금 가격의 상관관계 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 주요 경제지표와 금 가격의 상관관계 분석...)
+[KB Collector] Tavily Search 조회: 주요 경제지표와 금 가격의 상관관계 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '주요 경제지표와 금 가격의 상관관계 분석', 'max_results': 5})
+[KB Collector] 서브태스크 3: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+[DEBUG] 질문: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 지정학적 이벤트가 금 가격에 미치는 영향 평가...)
+[KB Collector] Tavily Search 조회: 지정학적 이벤트가 금 가격에 미치는 영향 평가
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '지정학적 이벤트가 금 가격에 미치는 영향 평가', 'max_results': 5})
+[KB Collector] Neo4j 저장 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[KB Collector] 수집 완료: 60개 소스, 백엔드=kv_fallback
+[Collector] 60개 소스 수집 완료
+[Analyst] 데이터 검증 시작...
+[Analyst] 분석 시작: 60개 소스
+[Analyst] LLM 응답 JSON 파싱 실패, 기본 구조 반환INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Analyst context flushed | Freed: 1.9MB | Usage: 82.4%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Writer context flushed | Freed: -1.2MB | Usage: 81.5%
+
+[Analyst] Yahoo Finance로 수치 재검증
+[Analyst] 티커를 추출할 수 없어 Yahoo Finance 검증 스킵
+[Analyst] 분석 완료: 5개 검증된 주장, 신뢰도=0.70, 충분성=True
+[Analyst] 검증 완료 (신뢰도: 70%, 충분성: True)
+[Router] 정보 충분 → Writer
+[Writer] 리포트 작성 시작...
+[Writer] 리포트 작성 시작
+[Writer] 리포트 작성 완료 (추천: HOLD, 신뢰도: 0.77)
+[Writer] 리포트 작성 완료 (추천: HOLD)
+
+============================================================
+[Agentic Workflow] 완료!
+- 서브태스크: 3개
+- 반복 횟수: 2회
+- 신뢰도: 77%
+- 추천: HOLD
+============================================================
+
+INFO:     127.0.0.1:56923 - "POST /agentic-query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56946 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57465 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57512 - "GET /health HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Planner context flushed | Freed: -33.8MB | Usage: 79.9%
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/src/engine/graphrag_engine.py", line 265, in aquery
+    response = await self.query_rag_api.aquery(question, param=query_param)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/graphrag.py", line 229, in aquery
+    response = await global_query(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 1028, in global_query
+    map_communities_points = await _map_global_communities(
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 983, in _map_global_communities
+    responses = await asyncio.gather(*[_process(c) for c in community_groups])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 979, in _process
+    data = use_string_json_convert_func(response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_utils.py", line 43, in convert_response_to_json
+    assert json_str is not None, f"Unable to parse JSON from response: {response}"
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: Unable to parse JSON from response: I don't know.
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:agents.memory_manager:[MemoryManager] Collector context flushed | Freed: -9.1MB | Usage: 77.7%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Analyst context flushed | Freed: -0.9MB | Usage: 77.8%
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/src/engine/graphrag_engine.py", line 265, in aquery
+    response = await self.query_rag_api.aquery(question, param=query_param)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/graphrag.py", line 229, in aquery
+    response = await global_query(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 1028, in global_query
+    map_communities_points = await _map_global_communities(
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 983, in _map_global_communities
+    responses = await asyncio.gather(*[_process(c) for c in community_groups])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 979, in _process
+    data = use_string_json_convert_func(response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_utils.py", line 43, in convert_response_to_json
+    assert json_str is not None, f"Unable to parse JSON from response: {response}"
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: Unable to parse JSON from response: I don't know.
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/src/engine/graphrag_engine.py", line 265, in aquery
+    response = await self.query_rag_api.aquery(question, param=query_param)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/graphrag.py", line 229, in aquery
+    response = await global_query(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 1028, in global_query
+    map_communities_points = await _map_global_communities(
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 983, in _map_global_communities
+    responses = await asyncio.gather(*[_process(c) for c in community_groups])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 979, in _process
+    data = use_string_json_convert_func(response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_utils.py", line 43, in convert_response_to_json
+    assert json_str is not None, f"Unable to parse JSON from response: {response}"
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: Unable to parse JSON from response: I don't know.
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+Traceback (most recent call last):
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/src/engine/graphrag_engine.py", line 265, in aquery
+    response = await self.query_rag_api.aquery(question, param=query_param)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/graphrag.py", line 229, in aquery
+    response = await global_query(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 1028, in global_query
+    map_communities_points = await _map_global_communities(
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 983, in _map_global_communities
+    responses = await asyncio.gather(*[_process(c) for c in community_groups])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_op.py", line 979, in _process
+    data = use_string_json_convert_func(response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.venv/lib/python3.11/site-packages/nano_graphrag/_utils.py", line 43, in convert_response_to_json
+    assert json_str is not None, f"Unable to parse JSON from response: {response}"
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: Unable to parse JSON from response: I don't know.
+INFO:agents.memory_manager:[MemoryManager] Collector context flushed | Freed: -7.8MB | Usage: 77.9%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Analyst context flushed | Freed: -0.8MB | Usage: 78.2%
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:agents.memory_manager:[MemoryManager] Writer context flushed | Freed: -6.9MB | Usage: 78.4%
+
+============================================================
+[Agentic Workflow] 질문: gold 수익률
+============================================================
+
+
+============================================================
+Agentic Workflow 시작: gold 수익률
+Session ID: d70c8bf6
+============================================================
+
+[Planner] 질문 분해 시작...
+[Planner] 질문 분석 시작: gold 수익률
+[Planner] 서브태스크 3개 생성 완료
+[Planner] 3개 서브태스크 생성 완료
+[Collector] 정보 수집 시작 (반복 1회)...
+[KB Collector] 지식 수집 시작: 'gold 수익률'
+[KB Collector] 3개 서브태스크 기반 수집
+[KB Collector] 서브태스크 1: 최근 5년간 금 가격 추세 분석
+[DEBUG] 질문: 최근 5년간 금 가격 추세 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+❌ [DEBUG] query_rag_api.aquery() 에러: AssertionError: Unable to parse JSON from response: I don't know.
+[KB Collector] GraphRAG 검색 실패: Unable to parse JSON from response: I don't know.
+[KB Collector] Tavily Search 조회: 최근 5년간 금 가격 추세 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '최근 5년간 금 가격 추세 분석', 'max_results': 5})
+[KB Collector] 서브태스크 2: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+[DEBUG] 질문: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 금 수익률에 영향을 미치는 주요 경제 지표 분석...)
+[KB Collector] Tavily Search 조회: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '금 수익률에 영향을 미치는 주요 경제 지표 분석', 'max_results': 5})
+[KB Collector] 서브태스크 3: 금과 다른 자산 간의 상관관계 분석
+[DEBUG] 질문: 금과 다른 자산 간의 상관관계 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: 금과 다른 자산 간의 상관관계 분석...)
+[KB Collector] Tavily Search 조회: 금과 다른 자산 간의 상관관계 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '금과 다른 자산 간의 상관관계 분석', 'max_results': 5})
+[KB Collector] Neo4j 저장 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[KB Collector] 수집 완료: 21개 소스, 백엔드=kv_fallback
+[Collector] 21개 소스 수집 완료
+[Analyst] 데이터 검증 시작...
+[Analyst] 분석 시작: 21개 소스
+[Analyst] LLM 응답 JSON 파싱 실패, 기본 구조 반환
+[Analyst] Yahoo Finance로 수치 재검증
+[Analyst] 티커를 추출할 수 없어 Yahoo Finance 검증 스킵
+[Analyst] 분석 완료: 5개 검증된 주장, 신뢰도=0.70, 충분성=False
+[Analyst] 검증 완료 (신뢰도: 70%, 충분성: False)
+[Router] 정보 부족 감지 → Collector 재실행
+[Collector] 정보 수집 시작 (반복 2회)...
+[KB Collector] 지식 수집 시작: 'gold 수익률'
+[KB Collector] 3개 서브태스크 기반 수집
+[KB Collector] 서브태스크 1: 최근 5년간 금 가격 추세 분석
+[DEBUG] 질문: 최근 5년간 금 가격 추세 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+❌ [DEBUG] query_rag_api.aquery() 에러: AssertionError: Unable to parse JSON from response: I don't know.
+[KB Collector] GraphRAG 검색 실패: Unable to parse JSON from response: I don't know.
+[KB Collector] Tavily Search 조회: 최근 5년간 금 가격 추세 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '최근 5년간 금 가격 추세 분석', 'max_results': 5})
+[KB Collector] 서브태스크 2: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+[DEBUG] 질문: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+❌ [DEBUG] query_rag_api.aquery() 에러: AssertionError: Unable to parse JSON from response: I don't know.
+[KB Collector] GraphRAG 검색 실패: Unable to parse JSON from response: I don't know.
+[KB Collector] Tavily Search 조회: 금 수익률에 영향을 미치는 주요 경제 지표 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '금 수익률에 영향을 미치는 주요 경제 지표 분석', 'max_results': 5})
+[KB Collector] 서브태스크 3: 금과 다른 자산 간의 상관관계 분석
+[DEBUG] 질문: 금과 다른 자산 간의 상관관계 분석
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+❌ [DEBUG] query_rag_api.aquery() 에러: AssertionError: Unable to parse JSON from response: I don't know.
+[KB Collector] GraphRAG 검색 실패: Unable to parse JSON from response: I don't know.
+[KB Collector] Tavily Search 조회: 금과 다른 자산 간의 상관관계 분석
+🔧 Mock MCP 호출: tavily-search.tavily_search({'query': '금과 다른 자산 간의 상관관계 분석', 'max_results': 5})
+[KB Collector] Neo4j 저장 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[KB Collector] 수집 완료: 24개 소스, 백엔드=error
+[Collector] 24개 소스 수집 완료
+[Analyst] 데이터 검증 시작...
+[Analyst] 분석 시작: 24개 소스
+[Analyst] LLM 응답 JSON 파싱 실패, 기본 구조 반환
+[Analyst] Yahoo Finance로 수치 재검증
+[Analyst] 티커를 추출할 수 없어 Yahoo Finance 검증 스킵
+[Analyst] 분석 완료: 5개 검증된 주장, 신뢰도=0.70, 충분성=True
+[Analyst] 검증 완료 (신뢰도: 70%, 충분성: True)
+[Router] 정보 충분 → Writer
+[Writer] 리포트 작성 시작...
+[Writer] 리포트 작성 시작
+[Writer] 리포트 작성 완료 (추천: HOLD, 신뢰도: 0.77)
+[Writer] 리포트 작성 완료 (추천: HOLD)
+
+============================================================
+[Agentic Workflow] 완료!
+- 서브태스크: 3개
+- 반복 횟수: 2회
+- 신뢰도: 77%
+- 추천: HOLD
+============================================================
+
+INFO:     127.0.0.1:57516 - "POST /agentic-query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57544 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62761 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63429 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63499 - "GET /health HTTP/1.1" 200 OK
+INFO:nano-graphrag:Revtrieved 5 communities
+INFO:nano-graphrag:Grouping to 1 groups for global search
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+📚 웹 검색 비활성화 - 업로드된 문서에서만 검색합니다
+📚 GraphRAG 모드로 처리 (mode: api, search_type: local, temperature: 0.2, top_k: 30)
+[DEBUG] 질문: f
+[DEBUG] 모드: api
+[DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
+[DEBUG] 그래프 노드 수: 340, 엣지 수: 134
+질문 모드: OpenAI API (top_k: 30)
+🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
+⚠️  그래프에 데이터가 있지만 답변을 생성하지 못했어요.
+💡 더 구체적인 질문을 시도해보세요!
+[Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
+[DEBUG] 9개의 출처 추출 완료 (질문: f...)
+[VALIDATION] Confidence: 100.0%
+[VALIDATION] Valid citations: 0/0
+[WARNING] Low confidence or invalid response, replacing with 'no info' response
+INFO:     127.0.0.1:63509 - "POST /query HTTP/1.1" 200 OK
 INFO:nano-graphrag:Revtrieved 5 communities
 INFO:nano-graphrag:Grouping to 1 groups for global search
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
@@ -78,15 +519,19 @@ ERROR:engine.executor:쿼리 실행 실패: Failed to DNS resolve address your-i
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 📚 웹 검색 비활성화 - 업로드된 문서에서만 검색합니다
 📚 GraphRAG 모드로 처리 (mode: api, search_type: local, temperature: 0.2, top_k: 30)
-[DEBUG] 질문: nvidia revenue
+[DEBUG] 질문: nvidia's revenue
 [DEBUG] 모드: api
 [DEBUG] 작업 디렉토리: /tmp/graph_storage_hybrid
 [DEBUG] 그래프 노드 수: 340, 엣지 수: 134
 질문 모드: OpenAI API (top_k: 30)
 🔍 [DEBUG] query_rag_api.aquery() 완료! (top_k: 30)
 [Neo4jRetriever] fallback to kv sources: ServiceUnavailable: Failed to DNS resolve address your-instance.databases.neo4j.io:7687: [Errno 8] nodename nor servname provided, or not known
-[DEBUG] 9개의 출처 추출 완료 (질문: nvidia revenue...)
+[DEBUG] 9개의 출처 추출 완료 (질문: nvidia's revenue...)
 [VALIDATION] Confidence: 75.0%
 [VALIDATION] Valid citations: 1/1
-INFO:     127.0.0.1:59031 - "POST /query HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59036 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63517 - "POST /query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63527 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [68465]

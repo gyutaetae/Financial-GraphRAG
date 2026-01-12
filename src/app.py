@@ -23,6 +23,9 @@ from utils import get_executive_report_prompt, get_web_search_report_prompt
 # engine은 "GraphRAG 엔진"이에요!
 # None은 "아직 아무것도 없다"는 뜻이에요!
 engine: HybridGraphRAGEngine = None
+mcp_manager = None
+neo4j_db = None
+agentic_workflow = None
 
 # --- [2] 서버 시작/종료 이벤트 핸들러 ---
 # @asynccontextmanager는 "비동기 컨텍스트 매니저"를 만드는 거예요!
@@ -30,7 +33,7 @@ engine: HybridGraphRAGEngine = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 서버가 시작될 때 실행되는 부분이에요!
-    global engine
+    global engine, mcp_manager, neo4j_db, agentic_workflow
     
     # 설정 정보를 출력해요!
     print_config()
@@ -44,11 +47,79 @@ async def lifespan(app: FastAPI):
     engine = HybridGraphRAGEngine()
     print("✅ HybridGraphRAGEngine 준비 완료!")
     
+    # MCP Manager 초기화 (옵션)
+    try:
+        from mcp.manager import MCPManager
+        print("🔧 MCP Manager 초기화 중...")
+        mcp_manager = MCPManager()
+        print("✅ MCP Manager 준비 완료!")
+    except Exception as e:
+        print(f"⚠️ MCP Manager 초기화 실패 (옵션): {e}")
+        mcp_manager = None
+    
+    # Neo4j DB 초기화 (옵션)
+    try:
+        from db.neo4j_db import Neo4jDatabase
+        print("🔧 Neo4j Database 초기화 중...")
+        neo4j_db = Neo4jDatabase()
+        print("✅ Neo4j Database 준비 완료!")
+    except Exception as e:
+        print(f"⚠️ Neo4j Database 초기화 실패 (옵션): {e}")
+        neo4j_db = None
+    
+    # Agentic Workflow 초기화
+    # #region agent log
+    import json
+    with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"location":"app.py:70","message":"Agentic Workflow init start","data":{"engine_ready":engine is not None,"mcp_ready":mcp_manager is not None,"neo4j_ready":neo4j_db is not None},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H2,H4"})+'\n')
+    # #endregion
+    try:
+        # #region agent log
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:72","message":"Before import AgenticWorkflow","data":{},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H5"})+'\n')
+        # #endregion
+        from agents.langgraph_workflow import AgenticWorkflow
+        # #region agent log
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:73","message":"After import AgenticWorkflow","data":{"class_type":str(type(AgenticWorkflow))},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H5"})+'\n')
+        # #endregion
+        print("🔧 Agentic Workflow 초기화 중...")
+        # #region agent log
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:74","message":"Before AgenticWorkflow instantiation","data":{},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H2,H3"})+'\n')
+        # #endregion
+        agentic_workflow = AgenticWorkflow(
+            engine=engine,
+            mcp_manager=mcp_manager,
+            neo4j_db=neo4j_db
+        )
+        # #region agent log
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:79","message":"After AgenticWorkflow instantiation","data":{"workflow_ready":agentic_workflow is not None},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H3"})+'\n')
+        # #endregion
+        print("✅ Agentic Workflow 준비 완료!")
+    except Exception as e:
+        # #region agent log
+        import traceback
+        with open('/Users/gyuteoi/Desktop/graphrag/Finance_GraphRAG/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"location":"app.py:80","message":"Agentic Workflow exception caught","data":{"error_type":type(e).__name__,"error_msg":str(e),"traceback":traceback.format_exc()},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"H1,H2,H3,H4,H5"})+'\n')
+        # #endregion
+        print(f"⚠️ Agentic Workflow 초기화 실패: {e}")
+        agentic_workflow = None
+    
     # yield는 "여기서 잠시 멈춰서 서버를 실행하고, 나중에 다시 돌아와"라는 뜻이에요!
     yield
     
-    # 서버가 종료될 때 실행되는 부분이에요! (현재는 비어있어요)
-    pass
+    # 서버가 종료될 때 실행되는 부분이에요!
+    if mcp_manager:
+        print("🔒 MCP Manager 종료 중...")
+        await mcp_manager.shutdown()
+        print("✅ MCP Manager 종료 완료!")
+    
+    if neo4j_db:
+        print("🔒 Neo4j Database 종료 중...")
+        neo4j_db.close()
+        print("✅ Neo4j Database 종료 완료!")
 
 # --- [3] FastAPI 앱 초기화 ---
 # FastAPI()는 "웹 서버 앱을 만들어줘"라는 뜻이에요!
@@ -362,6 +433,74 @@ async def insert(request: InsertRequest):
         raise HTTPException(status_code=500, detail=f"인덱싱 중 에러가 발생했어요: {str(e)}")
 
 # --- [12] 질문-답변 엔드포인트 (Decision Layer 통합) ---
+# --- [7] Agentic Query Endpoint ---
+@app.post("/agentic-query",
+          summary="Agentic Workflow 질문-답변",
+          description="LangGraph 기반 멀티 에이전트 워크플로우로 질문 처리 (Planner → Collector → Analyst → Writer)")
+async def agentic_query(request: QueryRequest):
+    """
+    Agentic Workflow를 사용한 질문-답변
+    
+    워크플로우:
+    1. Planner: 질문을 서브태스크로 분해
+    2. Collector: 각 서브태스크별 정보 수집 + Neo4j 저장
+    3. Analyst: 데이터 검증 + 충분성 판단 (부족 시 Collector로 회귀)
+    4. Writer: 최종 리포트 작성 + 추론 경로 포함
+    """
+    if agentic_workflow is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Agentic Workflow가 초기화되지 않았습니다. 서버를 재시작해주세요."
+        )
+    
+    if not request.question or not request.question.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="'question' 필드는 비어있을 수 없습니다."
+        )
+    
+    try:
+        print(f"\n{'='*60}")
+        print(f"[Agentic Workflow] 질문: {request.question}")
+        print(f"{'='*60}\n")
+        
+        # Agentic Workflow 실행 (최대 3회 Feedback Loop)
+        result = await agentic_workflow.run(
+            question=request.question,
+            max_iterations=3
+        )
+        
+        print(f"\n{'='*60}")
+        print(f"[Agentic Workflow] 완료!")
+        print(f"- 서브태스크: {len(result.get('subtasks', []))}개")
+        print(f"- 반복 횟수: {result.get('iteration_count', 0)}회")
+        print(f"- 신뢰도: {result.get('confidence', 0):.0%}")
+        print(f"- 추천: {result.get('recommendation', 'N/A')}")
+        print(f"{'='*60}\n")
+        
+        return {
+            "question": request.question,
+            "answer": result.get("answer", ""),
+            "sources": result.get("sources", []),
+            "confidence": result.get("confidence", 0.0),
+            "recommendation": result.get("recommendation", "HOLD"),
+            "reasoning_path": result.get("reasoning_path", []),
+            "subtasks": result.get("subtasks", []),
+            "iteration_count": result.get("iteration_count", 0),
+            "processing_steps": result.get("processing_steps", []),
+            "mode": "AGENTIC_WORKFLOW",
+            "status": "success"
+        }
+        
+    except Exception as e:
+        print(f"❌ Agentic Workflow 실패: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Agentic Workflow 처리 중 에러 발생: {str(e)}"
+        )
+
 # @app.post("/query")는 "질문을 받아서 답변을 주는" 엔드포인트예요!
 # mode 파라미터로 "api" 또는 "local"을 선택할 수 있어요!
 @app.post("/query",

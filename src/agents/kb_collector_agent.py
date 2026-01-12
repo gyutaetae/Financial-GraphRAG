@@ -4,6 +4,7 @@ GraphRAG + Web Search를 통한 정보 수집
 """
 
 import json
+import time
 from typing import Optional, List, Dict, Any
 
 from .base_agent import BaseAgent
@@ -44,12 +45,13 @@ class KBCollectorAgent(BaseAgent):
 }
 """
     
-    def __init__(self, engine=None, web_search_enabled: bool = False, mcp_manager=None):
+    def __init__(self, engine=None, web_search_enabled: bool = False, mcp_manager=None, neo4j_db=None):
         """
         Args:
             engine: HybridGraphRAGEngine 인스턴스 (None이면 lazy load)
             web_search_enabled: 웹 검색 활성화 여부
             mcp_manager: MCP Manager 인스턴스 (None이면 MCP 도구 비활성화)
+            neo4j_db: Neo4jDatabase 인스턴스 (Shared Memory용)
         """
         super().__init__(
             name="KB Collector",
@@ -59,6 +61,7 @@ class KBCollectorAgent(BaseAgent):
         self._engine = engine
         self.web_search_enabled = web_search_enabled
         self._mcp_manager = mcp_manager
+        self._neo4j_db = neo4j_db
         self._yahoo_tool = None
         self._tavily_tool = None
     
@@ -76,42 +79,17 @@ class KBCollectorAgent(BaseAgent):
         context.add_step(f"{self.name}: 지식 수집 시작")
         
         try:
-            # 1. GraphRAG 검색 (기존 엔진 활용)
-            sources, raw_context, backend = await self._retrieve_from_graphrag(
-                context.question
-            )
+            # 서브태스크 기반 수집 (LangGraph 워크플로우)
+            if context.subtasks:
+                self._log(f"{len(context.subtasks)}개 서브태스크 기반 수집")
+                await self._collect_by_subtasks(context)
+            else:
+                # 일반 수집 (기존 방식)
+                await self._collect_general(context)
             
-            context.sources = sources
-            context.raw_context = raw_context
-            context.retrieval_backend = backend
-            
-            # 2. Yahoo Finance로 실시간 데이터 보강 (MCP 활성화 시)
-            if self._mcp_manager and self._should_use_yahoo(context.question):
-                self._log("Yahoo Finance로 실시간 데이터 보강")
-                yahoo_sources = await self._fetch_yahoo_data(context.question)
-                if yahoo_sources:
-                    context.sources.extend(yahoo_sources)
-                    context.retrieval_backend += "+yahoo"
-            
-            # 3. Tavily Search로 최신 뉴스 보강 (MCP 활성화 시)
-            if self._mcp_manager and (context.enable_web_search or len(sources) < 3):
-                self._log("Tavily Search로 최신 뉴스 보강")
-                tavily_sources = await self._fetch_tavily_search(context.question)
-                if tavily_sources:
-                    context.sources.extend(tavily_sources)
-                    context.retrieval_backend += "+tavily"
-            
-            # 4. 웹 검색 (기존 방식, MCP 없을 때)
-            elif context.enable_web_search and len(sources) < 3:
-                self._log("소스가 부족하여 웹 검색 시도")
-                web_sources = await self._retrieve_from_web(context.question)
-                context.sources.extend(web_sources)
-                context.retrieval_backend += "+web"
-            
-            # 5. 상충 데이터 감지 (LLM 활용)
-            if len(context.sources) >= 2:
-                conflicts = await self._detect_conflicts(context.sources, context.question)
-                context.conflicts = conflicts
+            # Neo4j Shared Memory에 저장
+            if self._neo4j_db and context.sources:
+                await self._save_to_neo4j(context)
             
             self._log(f"수집 완료: {len(context.sources)}개 소스, 백엔드={context.retrieval_backend}")
             context.add_step(f"{self.name}: {len(context.sources)}개 소스 수집 완료")
@@ -121,8 +99,148 @@ class KBCollectorAgent(BaseAgent):
         except Exception as e:
             self._log(f"지식 수집 실패: {e}")
             context.add_step(f"{self.name}: 실패 - {str(e)}")
-            # 빈 결과라도 다음 에이전트로 전달
             return context
+    
+    async def _collect_by_subtasks(self, context: AgentContext) -> None:
+        """
+        서브태스크 기반 정보 수집
+        
+        Args:
+            context: 공유 컨텍스트
+        """
+        for subtask in context.subtasks:
+            task_query = subtask.get("task", context.question)
+            self._log(f"서브태스크 {subtask['id']}: {task_query}")
+            
+            # GraphRAG 검색
+            sources, raw_context, backend = await self._retrieve_from_graphrag(task_query)
+            
+            # 서브태스크 메타데이터 추가
+            for source in sources:
+                source["subtask_id"] = subtask["id"]
+                source["subtask_target"] = subtask.get("target", "general")
+            
+            context.sources.extend(sources)
+            context.raw_context += f"\n\n### Subtask {subtask['id']}: {task_query}\n{raw_context}"
+            context.retrieval_backend = backend
+            
+            # MCP 도구 활용
+            if self._mcp_manager:
+                if self._should_use_yahoo(task_query):
+                    yahoo_sources = await self._fetch_yahoo_data(task_query)
+                    for s in yahoo_sources:
+                        s["subtask_id"] = subtask["id"]
+                    context.sources.extend(yahoo_sources)
+                
+                if context.enable_web_search or len(sources) < 2:
+                    tavily_sources = await self._fetch_tavily_search(task_query)
+                    for s in tavily_sources:
+                        s["subtask_id"] = subtask["id"]
+                    context.sources.extend(tavily_sources)
+    
+    async def _collect_general(self, context: AgentContext) -> None:
+        """
+        일반 정보 수집 (기존 방식)
+        
+        Args:
+            context: 공유 컨텍스트
+        """
+        # 1. GraphRAG 검색
+        sources, raw_context, backend = await self._retrieve_from_graphrag(context.question)
+        
+        context.sources = sources
+        context.raw_context = raw_context
+        context.retrieval_backend = backend
+        
+        # 2. Yahoo Finance 보강
+        if self._mcp_manager and self._should_use_yahoo(context.question):
+            self._log("Yahoo Finance로 실시간 데이터 보강")
+            yahoo_sources = await self._fetch_yahoo_data(context.question)
+            if yahoo_sources:
+                context.sources.extend(yahoo_sources)
+                context.retrieval_backend += "+yahoo"
+        
+        # 3. Tavily Search 보강
+        if self._mcp_manager and (context.enable_web_search or len(sources) < 3):
+            self._log("Tavily Search로 최신 뉴스 보강")
+            tavily_sources = await self._fetch_tavily_search(context.question)
+            if tavily_sources:
+                context.sources.extend(tavily_sources)
+                context.retrieval_backend += "+tavily"
+        
+        # 4. 상충 데이터 감지
+        if len(context.sources) >= 2:
+            conflicts = await self._detect_conflicts(context.sources, context.question)
+            context.conflicts = conflicts
+    
+    async def _save_to_neo4j(self, context: AgentContext) -> None:
+        """
+        수집한 데이터를 Neo4j Shared Memory에 저장
+        
+        Args:
+            context: 공유 컨텍스트
+        """
+        try:
+            import uuid
+            import json
+            
+            session_id = str(uuid.uuid4())[:8]
+            
+            # 서브태스크별로 저장
+            if context.subtasks:
+                for subtask in context.subtasks:
+                    subtask_id = subtask["id"]
+                    key = f"agentic:{session_id}:{subtask_id}"
+                    
+                    # 해당 서브태스크의 소스만 필터링
+                    subtask_sources = [
+                        s for s in context.sources 
+                        if s.get("subtask_id") == subtask_id
+                    ]
+                    
+                    data = {
+                        "subtask": subtask,
+                        "sources": subtask_sources,
+                        "collected_at": time.time()
+                    }
+                    
+                    # Neo4j에 저장 (간단히 노드로 저장)
+                    self._neo4j_db.create_node(
+                        node_id=key,
+                        node_data={
+                            "type": "AgenticData",
+                            "session_id": session_id,
+                            "subtask_id": subtask_id,
+                            "data": json.dumps(data)
+                        }
+                    )
+                    
+                    context.neo4j_keys.append(key)
+                    self._log(f"Neo4j 저장: {key}")
+            else:
+                # 일반 저장
+                key = f"agentic:{session_id}:general"
+                data = {
+                    "question": context.question,
+                    "sources": context.sources,
+                    "collected_at": time.time()
+                }
+                
+                self._neo4j_db.create_node(
+                    node_id=key,
+                    node_data={
+                        "type": "AgenticData",
+                        "session_id": session_id,
+                        "data": json.dumps(data)
+                    }
+                )
+                
+                context.neo4j_keys.append(key)
+                self._log(f"Neo4j 저장: {key}")
+                
+        except Exception as e:
+            self._log(f"Neo4j 저장 실패: {e}")
+            # 저장 실패해도 워크플로우 계속 진행
     
     async def _retrieve_from_graphrag(
         self,

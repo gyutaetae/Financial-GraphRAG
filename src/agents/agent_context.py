@@ -25,6 +25,12 @@ class AgentContext:
     complexity: QueryComplexity = QueryComplexity.SIMPLE
     enable_web_search: bool = False
     
+    # Planner 결과 (LangGraph 워크플로우용)
+    subtasks: List[Dict[str, Any]] = field(default_factory=list)
+    iteration_count: int = 0  # Feedback Loop 제어
+    neo4j_keys: List[str] = field(default_factory=list)  # Neo4j 저장 키 추적
+    needs_more_info: bool = False  # Analyst의 충분성 판단
+    
     # KB Collector 결과
     sources: List[Dict[str, Any]] = field(default_factory=list)
     conflicts: List[Dict[str, Any]] = field(default_factory=list)
@@ -38,6 +44,7 @@ class AgentContext:
     # Writer 결과
     final_report: str = ""
     recommendation: Optional[str] = None  # BUY/HOLD/SELL
+    reasoning_path: List[str] = field(default_factory=list)  # 추론 경로
     
     # 메타데이터
     retrieval_backend: str = ""
@@ -58,5 +65,6 @@ class AgentContext:
             "insights": self.insights,
             "retrieval_backend": self.retrieval_backend,
             "processing_steps": self.processing_steps,
-            "mode": "MULTI_AGENT"
+            "reasoning_path": self.reasoning_path,
+            "mode": "AGENTIC_WORKFLOW" if self.subtasks else "MULTI_AGENT"
         }

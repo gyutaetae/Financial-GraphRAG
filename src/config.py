@@ -19,6 +19,9 @@ RUN_MODE: Literal["API", "LOCAL"] = os.getenv("RUN_MODE", "API")  # type: ignore
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
+# Ollama Configuration (하이브리드 클라우드 지원)
+OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
 # Model configurations with strict typing
 API_MODELS: Dict[str, str | int] = {
     "llm": "gpt-4o-mini",  # Fast, cost-effective for financial analysis

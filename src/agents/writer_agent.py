@@ -44,12 +44,17 @@ class WriterAgent(BaseAgent):
 }
 """
     
-    def __init__(self):
+    def __init__(self, neo4j_db=None):
+        """
+        Args:
+            neo4j_db: Neo4jDatabase 인스턴스 (Shared Memory용)
+        """
         super().__init__(
             name="Writer",
             system_prompt=self.SYSTEM_PROMPT,
             temperature=0.3  # 약간의 창의성 허용
         )
+        self._neo4j_db = neo4j_db
     
     async def execute(self, context: AgentContext) -> AgentContext:
         """
@@ -71,12 +76,23 @@ class WriterAgent(BaseAgent):
             return context
         
         try:
-            # 1. LLM을 활용한 리포트 작성
+            # 1. Neo4j에서 전체 컨텍스트 읽기 (LangGraph 워크플로우)
+            full_context = context
+            if self._neo4j_db and context.neo4j_keys:
+                full_context = await self._load_full_context(context)
+                self._log(f"Neo4j에서 전체 컨텍스트 로드 완료")
+            
+            # 2. 추론 경로 생성 (서브태스크 기반)
+            if context.subtasks:
+                context.reasoning_path = self._build_reasoning_path(context)
+            
+            # 3. LLM을 활용한 리포트 작성
             report_result = await self._generate_report(
                 context.question,
                 context.validated_data,
                 context.insights,
-                context.sources
+                context.sources,
+                context.reasoning_path
             )
             
             # 2. 결과를 컨텍스트에 반영
@@ -107,10 +123,14 @@ class WriterAgent(BaseAgent):
         question: str,
         validated_data: list,
         insights: list,
-        sources: list
+        sources: list,
+        reasoning_path: list = None
     ) -> dict:
         """
         LLM을 활용한 리포트 생성
+        
+        Args:
+            reasoning_path: 추론 경로 (옵션)
         
         Returns:
             {"report": str, "recommendation": str, "confidence": float}
@@ -130,6 +150,13 @@ class WriterAgent(BaseAgent):
             for i, s in enumerate(sources[:10])
         ])
         
+        # 추론 경로 (있는 경우)
+        reasoning_section = ""
+        if reasoning_path:
+            reasoning_section = f"\n\n추론 경로:\n" + "\n".join([
+                f"{i+1}. {step}" for i, step in enumerate(reasoning_path)
+            ])
+        
         prompt = f"""질문: {question}
 
 검증된 데이터:
@@ -139,7 +166,7 @@ class WriterAgent(BaseAgent):
 {insights_summary}
 
 출처:
-{sources_list}
+{sources_list}{reasoning_section}
 
 위 정보를 바탕으로 투자자용 전문 리포트를 작성하세요.
 
@@ -207,3 +234,111 @@ JSON 형식으로 응답:
                 )
         
         return "\n".join(lines)
+    
+    async def _load_full_context(self, context: AgentContext) -> AgentContext:
+        """
+        Neo4j에서 전체 컨텍스트 로드 (모든 서브태스크 데이터 통합)
+        
+        Args:
+            context: 공유 컨텍스트
+            
+        Returns:
+            통합 컨텍스트
+        """
+        try:
+            import json
+            
+            all_sources = []
+            all_insights = []
+            
+            for key in context.neo4j_keys:
+                # Neo4j에서 노드 조회
+                with self._neo4j_db.driver.session() as session:
+                    result = session.run(
+                        "MATCH (n {id: $key}) RETURN n",
+                        key=key
+                    )
+                    
+                    for record in result:
+                        node = record["n"]
+                        data_str = node.get("data", "{}")
+                        data = json.loads(data_str)
+                        
+                        # 소스 통합
+                        sources = data.get("sources", [])
+                        all_sources.extend(sources)
+                        
+                        # 서브태스크 정보 추출
+                        if "subtask" in data:
+                            subtask = data["subtask"]
+                            all_insights.append(
+                                f"서브태스크 {subtask['id']} ({subtask['task']}): "
+                                f"{len(sources)}개 소스 수집"
+                            )
+            
+            # 중복 제거
+            seen_ids = set()
+            unique_sources = []
+            for s in all_sources:
+                sid = s.get("id", s.get("excerpt", "")[:50])
+                if sid not in seen_ids:
+                    seen_ids.add(sid)
+                    unique_sources.append(s)
+            
+            # 컨텍스트 업데이트
+            if unique_sources:
+                context.sources = unique_sources
+            if all_insights:
+                context.insights.extend(all_insights)
+            
+            return context
+            
+        except Exception as e:
+            self._log(f"Neo4j 컨텍스트 로드 실패: {e}")
+            return context
+    
+    def _build_reasoning_path(self, context: AgentContext) -> list:
+        """
+        서브태스크 기반 추론 경로 생성
+        
+        Args:
+            context: 공유 컨텍스트
+            
+        Returns:
+            추론 경로 문자열 리스트
+        """
+        path = []
+        
+        if not context.subtasks:
+            return path
+        
+        path.append(f"질문 분해: {len(context.subtasks)}개 서브태스크")
+        
+        for subtask in context.subtasks:
+            subtask_id = subtask["id"]
+            task_desc = subtask.get("task", "")
+            target = subtask.get("target", "general")
+            
+            # 해당 서브태스크의 소스 개수
+            subtask_sources = [
+                s for s in context.sources 
+                if s.get("subtask_id") == subtask_id
+            ]
+            
+            path.append(
+                f"서브태스크 {subtask_id} ({target}): {task_desc} "
+                f"→ {len(subtask_sources)}개 소스 수집"
+            )
+        
+        # 검증 단계
+        if context.validated_data:
+            path.append(
+                f"데이터 검증: {len(context.validated_data)}개 주장 검증 완료 "
+                f"(신뢰도 {context.confidence:.0%})"
+            )
+        
+        # 반복 횟수
+        if context.iteration_count > 0:
+            path.append(f"피드백 루프: {context.iteration_count}회 정보 보강")
+        
+        return path
