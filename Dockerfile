@@ -27,9 +27,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY data/ ./data/
 COPY mcp-config.json .
-COPY data_sources.json .
 COPY README.md .
 COPY schema.md .
+
+# Create data_sources.json (will be created/overwritten by volume mount if exists)
+RUN echo '{"pdf": [], "text": [], "url": []}' > data_sources.json
 
 # Create necessary directories
 RUN mkdir -p logs storage/graph_storage
