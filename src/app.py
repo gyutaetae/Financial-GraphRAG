@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # engine 모듈에서 HybridGraphRAGEngine을 가져와요!
 from engine import HybridGraphRAGEngine
 from config import print_config, validate_config, ROUTER_MODEL, ROUTER_TEMPERATURE, WEB_SEARCH_MAX_RESULTS, OPENAI_API_KEY, OPENAI_BASE_URL
-from search import web_search, format_search_results
 from openai import AsyncOpenAI
 from utils import get_executive_report_prompt, get_web_search_report_prompt
 
@@ -184,6 +183,7 @@ Respond with ONLY ONE WORD: Either "GRAPH_RAG" or "WEB_SEARCH" - nothing else.""
 async def handle_web_search(question: str) -> str:
     """
     웹 검색을 수행하고 결과를 요약하는 함수
+    Note: Legacy function - web search is now handled by Multi-Agent system with MCP Tavily
     
     Args:
         question: 사용자 질문
@@ -191,55 +191,8 @@ async def handle_web_search(question: str) -> str:
     Returns:
         검색 결과를 바탕으로 생성된 답변
     """
-    try:
-        # 1. DuckDuckGo로 웹 검색
-        print(f"🔍 웹 검색 시작: {question}")
-        search_results = await web_search(question, max_results=WEB_SEARCH_MAX_RESULTS)
-        
-        if not search_results:
-            return "죄송해요, 관련된 최신 정보를 찾을 수 없었어요. 다른 질문을 해보시겠어요?"
-        
-        # 2. 검색 결과를 텍스트로 포맷
-        formatted_results = await format_search_results(search_results)
-        
-        # 3. GPT-4o-mini로 검색 결과 요약
-        client = AsyncOpenAI(
-            api_key=OPENAI_API_KEY,
-            base_url=OPENAI_BASE_URL
-        )
-        
-        synthesis_prompt = f"""Based on the following web search results, answer the user's question comprehensively.
-Include relevant data and cite sources with URLs when possible.
-
-User Question: {question}
-
-Search Results:
-{formatted_results}
-
-Provide a clear, concise answer with sources."""
-
-        response = await client.chat.completions.create(
-            model=ROUTER_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a helpful financial assistant that synthesizes web search results into clear answers."},
-                {"role": "user", "content": synthesis_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=1000
-        )
-        
-        answer = response.choices[0].message.content.strip()
-        
-        # 출처 정보 추가
-        sources = "\n\n📚 출처:\n"
-        for idx, result in enumerate(search_results[:3], 1):
-            sources += f"{idx}. {result['title']}\n   {result['url']}\n"
-        
-        return answer + sources
-    
-    except Exception as e:
-        print(f"❌ 웹 검색 처리 중 에러 발생: {e}")
-        return f"웹 검색 중 에러가 발생했어요: {str(e)}"
+    # Web search is now handled by Multi-Agent system with MCP Tavily
+    return "웹 검색 기능은 Multi-Agent 모드에서 사용 가능합니다. Advanced Settings에서 'Multi-Agent Analysis Mode'를 활성화해주세요."
 
 
 # --- [6] 루트 엔드포인트 ---
@@ -489,42 +442,10 @@ async def query(request: QueryRequest):
         sources_list = []
         
         if query_type == "WEB_SEARCH":
-            # 웹 검색으로 처리
-            print(f"🌐 웹 검색 모드로 처리")
-            # 웹 검색 수행
-            search_results = await web_search(request.question, max_results=WEB_SEARCH_MAX_RESULTS)
-            
-            if search_results:
-                # 웹 검색 결과를 sources 형식으로 변환
-                sources_list = [
-                    {
-                        "id": idx,
-                        "file": result["title"],
-                        "chunk_id": result["url"],
-                        "excerpt": result["snippet"],
-                        "url": result["url"]
-                    }
-                    for idx, result in enumerate(search_results, 1)
-                ]
-                
-                # Report 형식 프롬프트 생성
-                report_prompt = get_web_search_report_prompt(request.question, search_results)
-                
-                # LLM으로 보고서 생성 (사용자 지정 temperature 사용)
-                client = AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
-                llm_response = await client.chat.completions.create(
-                    model=ROUTER_MODEL,
-                    messages=[
-                        {"role": "system", "content": report_prompt},
-                        {"role": "user", "content": request.question}
-                    ],
-                    temperature=request.temperature,
-                    max_tokens=2000
-                )
-                response = llm_response.choices[0].message.content.strip()
-            else:
-                response = "죄송해요, 웹 검색 결과를 찾을 수 없었어요. 다른 질문을 해보시겠어요?"
-            
+            # 웹 검색으로 처리 - Multi-Agent 모드 사용 권장
+            print(f"🌐 웹 검색 모드 감지 - Multi-Agent 모드 권장")
+            response = "웹 검색 기능은 Multi-Agent Analysis 모드에서 더 강력하게 동작합니다. Advanced Settings에서 'Multi-Agent Analysis Mode'를 활성화한 후 다시 질문해주세요."
+            sources_list = []
             source = "WEB_SEARCH"
         else:
             # GraphRAG로 처리 (출처 정보 포함)
