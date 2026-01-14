@@ -1,36 +1,13 @@
 """
-GraphRAG 핵심 로직
-인덱싱 및 검색 기능을 담당하는 파일이에요!
+GraphRAG 핵심 로직 - Privacy Mode 전용
+직접 구현한 Ollama → JSON → Cypher → Neo4j 파이프라인 사용
+nano-graphrag 의존성 완전 제거
 """
 
 import os
 import asyncio
 import sys
 from typing import Optional, Literal, Dict, List
-
-from nano_graphrag import GraphRAG
-from nano_graphrag.base import QueryParam
-
-# graspologic 패키지가 없을 때를 대비한 더미 모듈
-try:
-    import graspologic
-    import graspologic.utils
-except ImportError:
-    class DummyGraspologic:
-        class partition:
-            @staticmethod
-            def hierarchical_leiden(*args, **kwargs):
-                return {}
-        
-        class utils:
-            @staticmethod
-            def largest_connected_component(graph):
-                return graph
-    
-    sys.modules['graspologic'] = DummyGraspologic()
-    sys.modules['graspologic.partition'] = DummyGraspologic.partition
-    sys.modules['graspologic.utils'] = DummyGraspologic.utils
-    print("⚠️  graspologic가 없어서 더미 모듈을 사용해요. 클러스터링 기능이 제한될 수 있어요.")
 
 # src 디렉토리를 Python path에 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,13 +19,13 @@ from config import (
     validate_config,
     NEO4J_AUTO_EXPORT,
     ENABLE_DOMAIN_SCHEMA,
+    PRIVACY_MODE,
+    NEO4J_URI,
+    NEO4J_USERNAME,
+    NEO4J_PASSWORD,
 )
 
 from utils import (
-    openai_model_if,
-    openai_embedding_if,
-    ollama_model_if,
-    ollama_embedding_if,
     preprocess_text,
     chunk_text,
     get_financial_entity_prompt,
@@ -62,54 +39,53 @@ from engine.relationship_inferencer import RelationshipInferencer
 from db.neo4j_db import Neo4jDatabase
 
 
-class HybridGraphRAGEngine:
+class PrivacyGraphRAGEngine:
     """
-    하이브리드 GraphRAG 엔진 클래스
-    인덱싱은 OpenAI API를 사용하고, 질문은 API/LOCAL 모드를 선택할 수 있어요!
+    Privacy-First GraphRAG 엔진 (nano-graphrag 제거)
+    직접 구현: Ollama → JSON → Cypher → Neo4j
+    8GB RAM 최적화, 로컬 전용 처리
     """
     
     def __init__(self, working_dir: Optional[str] = None) -> None:
         """
-        GraphRAG 엔진 초기화
+        GraphRAG 엔진 초기화 (Privacy Mode 전용)
         
         Args:
             working_dir: 그래프 데이터를 저장할 폴더 경로 (기본값: config.WORKING_DIR)
+        
+        Raises:
+            RuntimeError: Privacy Mode 설정이 불완전한 경우
         """
         validate_config()
         
         self.working_dir = working_dir or WORKING_DIR
         os.makedirs(self.working_dir, exist_ok=True)
         
-        # 인덱싱용 GraphRAG 인스턴스 (항상 OpenAI API 사용)
-        self.indexing_rag = GraphRAG(
-            working_dir=self.working_dir,
-            best_model_func=openai_model_if,
-            cheap_model_func=openai_model_if,
-            embedding_func=openai_embedding_if,
-            chunk_token_size=2000,  # 1200 -> 2000 (API 호출 횟수 감소)
-            addon_params={
-                "entity_extract_max_gleaning": 0,  # 1 -> 0 (재추출 비활성화로 2배 속도 향상)
-                "entity_summary_to_max_tokens": 300,  # 요약 길이 제한
-            }
-        )
+        # Privacy Mode 필수 확인
+        if not PRIVACY_MODE and not (NEO4J_URI and NEO4J_PASSWORD):
+            raise RuntimeError(
+                "Privacy Mode requires PRIVACY_MODE=true OR valid Neo4j config. "
+                "Check .env file: PRIVACY_MODE, NEO4J_URI, NEO4J_PASSWORD"
+            )
         
-        # 질문용 GraphRAG 인스턴스들 (API/LOCAL 선택 가능)
-        self.query_rag_api = GraphRAG(
-            working_dir=self.working_dir,
-            best_model_func=openai_model_if,
-            cheap_model_func=openai_model_if,
-            embedding_func=openai_embedding_if,
-        )
+        print("🔧 Privacy Mode: 직접 구현 Graph Builder (Ollama → JSON → Cypher → Neo4j)")
         
-        self.query_rag_local = GraphRAG(
-            working_dir=self.working_dir,
-            best_model_func=ollama_model_if,
-            cheap_model_func=ollama_model_if,
-            embedding_func=openai_embedding_if,  # 인덱싱과 같은 embedding 사용!
-        )
+        # Import Privacy components (필수)
+        try:
+            from engine.privacy_ingestor import PrivacyIngestor
+            from engine.privacy_graph_builder import PrivacyGraphBuilder
+            
+            self.privacy_ingestor = PrivacyIngestor()
+            self.privacy_graph_builder = None  # Lazy init (Neo4j 필요 시)
+            self.use_privacy_mode = True
+            print("✅ Privacy Graph Builder 준비 완료")
+        except Exception as e:
+            print(f"❌ Privacy Graph Builder 초기화 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Privacy Mode initialization failed: {e}")
 
         # Neo4j 기반 정밀 Retriever (근거/출처 생성용)
-        # Neo4j 연결이 없으면 QueryExecutor에서 예외가 날 수 있으니 lazy 하게 사용
         self._neo4j_retriever: Neo4jRetriever | None = None
         
         # 도메인 스키마 관련 컴포넌트 (lazy loading)
@@ -118,15 +94,32 @@ class HybridGraphRAGEngine:
         self._neo4j_db: Neo4jDatabase | None = None
         self.enable_domain_schema = ENABLE_DOMAIN_SCHEMA
         
-        print(f"HybridGraphRAGEngine 초기화 완료!")
-        print(f"작업 디렉토리: {self.working_dir}")
-        print(f"인덱싱 모드: OpenAI API")
-        print(f"질문 모드: API 또는 LOCAL 선택 가능")
-        print(f"도메인 스키마: {'활성화' if self.enable_domain_schema else '비활성화'}")
+        print(f"✅ PrivacyGraphRAGEngine 초기화 완료!")
+        print(f"📁 작업 디렉토리: {self.working_dir}")
+        print(f"🔧 인덱싱 모드: Privacy Graph Builder (직접 구현)")
+        print(f"🏗️  도메인 스키마: {'활성화' if self.enable_domain_schema else '비활성화'}")
+    
+    def _get_neo4j_db(self):
+        """
+        Lazy initialization of Neo4j database connection
+        
+        Returns:
+            Neo4jDatabase instance
+        """
+        if self._neo4j_db is None:
+            from db.neo4j_db import Neo4jDatabase
+            self._neo4j_db = Neo4jDatabase(
+                uri=NEO4J_URI,
+                username=NEO4J_USERNAME,
+                password=NEO4J_PASSWORD
+            )
+            print(f"✅ Neo4j DB 연결 초기화: {NEO4J_URI}")
+        return self._neo4j_db
     
     async def ainsert(self, text: str) -> None:
         """
         비동기로 텍스트를 그래프에 인덱싱하는 함수
+        Privacy Graph Builder 우선 사용, nano-graphrag는 fallback
         
         Args:
             text: 인덱싱할 텍스트
@@ -136,58 +129,53 @@ class HybridGraphRAGEngine:
             text = text[:DEV_MODE_MAX_CHARS]
             print(f"[DEV_MODE] 텍스트를 {DEV_MODE_MAX_CHARS}자로 제한했어요!")
         
-        # 1) 텍스트 전처리
-        processed_text = preprocess_text(text)
-        
-        # 2) 청크 분할
-        chunks = chunk_text(processed_text, max_tokens=1200)
-        print(f"[DEBUG] 인덱싱용 청크 개수: {len(chunks)}")
-        
-        # 3) 비동기 병렬 인덱싱 (최대 동시 15개로 증가)
-        semaphore = asyncio.Semaphore(15)  # 10 -> 15 (병렬 처리 증가)
-        
-        async def insert_one(chunk_text: str, idx: int) -> None:
-            async with semaphore:
-                print(f"[DEBUG] 청크 {idx+1}/{len(chunks)} 인덱싱 시작")
-                await self.indexing_rag.ainsert(chunk_text)
-                print(f"[DEBUG] 청크 {idx+1}/{len(chunks)} 인덱싱 완료")
-        
-        # 4) 모든 청크를 동시에 인덱싱
-        tasks = [insert_one(chunk, i) for i, chunk in enumerate(chunks)]
-        await asyncio.gather(*tasks)
-        
-        print("인덱싱 완료! (비동기 병렬 처리 + 텍스트 전처리 적용)")
-        
-        # 5) 도메인 노드 변환 (옵션)
-        if self.enable_domain_schema:
-            print("🔄 도메인 노드 변환 시작...")
-            await self._convert_to_domain_nodes()
-        
-        # 6) Neo4j로 자동 업로드 (설정되어 있을 경우)
-        if NEO4J_AUTO_EXPORT:
-            print("Neo4j로 자동 업로드 시작...")
+        # Privacy Graph Builder 사용 (우선)
+        if self.use_privacy_mode and self.privacy_ingestor:
+            print("🔧 Privacy Graph Builder로 인덱싱 (직접 구현: LLM → JSON → Cypher → Neo4j)")
+            
+            # Initialize Neo4j if needed
+            if self._neo4j_db is None:
+                self._neo4j_db = self._get_neo4j_db()
+            
+            # Initialize Privacy Graph Builder
+            if self.privacy_graph_builder is None:
+                from engine.privacy_graph_builder import PrivacyGraphBuilder
+                self.privacy_graph_builder = PrivacyGraphBuilder(neo4j_db=self._neo4j_db)
+            
+            # Save text to temp file
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+                f.write(text)
+                temp_path = f.name
+            
             try:
-                from ..db.neo4j_db import Neo4jDatabase
-                graphml_path = os.path.join(self.working_dir, "graph_chunk_entity_relation.graphml")
+                # Ingest and build graph
+                chunks = self.privacy_ingestor.ingest_file(temp_path)
+                stats = await self.privacy_graph_builder.build_graph_sequential(chunks)
                 
-                if os.path.exists(graphml_path):
-                    db = Neo4jDatabase()
-                    result = await asyncio.to_thread(
-                        db.upload_graphml,
-                        graphml_path,
-                        clear_before=False
-                    )
-                    if result["status"] == "success":
-                        print(f"Neo4j 업로드 완료! 노드: {result['nodes']}개, 관계: {result['edges']}개")
-                    else:
-                        print(f"Neo4j 업로드 실패: {result['message']}")
-                else:
-                    print(f"GraphML 파일을 찾을 수 없어요: {graphml_path}")
+                print(f"✅ Privacy Graph Builder 인덱싱 완료!")
+                print(f"   📊 Entities: {stats['entities_extracted']}")
+                print(f"   🔗 Relationships: {stats['relationships_extracted']}")
+                print(f"   💾 Queries: {stats['queries_executed']}")
+                
+                # Cleanup
+                import os
+                os.unlink(temp_path)
+                
+                # 도메인 노드 변환은 이미 Privacy Graph Builder에서 처리됨
+                return
+                
             except Exception as e:
-                print(f"Neo4j 업로드 중 에러 발생: {e}")
-                print("NEO4J_URI, NEO4J_PASSWORD가 .env에 설정되어 있는지 확인해주세요!")
-        else:
-            print("Neo4j 자동 업로드가 비활성화되어 있어요. NEO4J_AUTO_EXPORT=true로 설정하면 자동 업로드됩니다!")
+                print(f"❌ Privacy Graph Builder 실패: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # Cleanup temp file
+                import os
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                
+                raise RuntimeError(f"Indexing failed: {e}")
     
     async def aquery(
         self,
@@ -239,6 +227,58 @@ class HybridGraphRAGEngine:
         print(f"[DEBUG] 질문: {question}")
         print(f"[DEBUG] 모드: {mode}")
         print(f"[DEBUG] 작업 디렉토리: {self.working_dir}")
+        
+        # Privacy Mode: Use Privacy Analyst Agent (Neo4j + Ollama)
+        if self.use_privacy_mode:
+            print("🔧 Privacy Mode: Privacy Analyst Agent 사용 (Neo4j + Ollama)")
+            
+            try:
+                from agents.privacy_analyst import PrivacyAnalystAgent
+                
+                # Initialize agent
+                analyst = PrivacyAnalystAgent()
+                
+                # Get answer
+                response = await analyst.analyze(question)
+                
+                print(f"✅ Privacy Analyst Agent 답변 완료!")
+                
+                # Return with context if requested
+                if return_context:
+                    # Get context from Neo4j
+                    ctx = await self._aretrieve_context_from_neo4j(question=question, top_sources=min(top_k, 10))
+                    return {
+                        "answer": response,
+                        "sources": ctx.get("sources", []),
+                        "retrieval_backend": "privacy_mode_neo4j"
+                    }
+                
+                return response
+                
+            except Exception as e:
+                print(f"❌ Privacy Analyst Agent 실패: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # Privacy Mode가 실패한 경우 상세한 에러 메시지 제공
+                error_msg = f"""
+Privacy Mode 실행 실패: {str(e)}
+
+해결 방법:
+1. Ollama 서버 실행 확인: ollama serve
+2. Neo4j 연결 확인: docker ps | grep neo4j
+3. 모델 다운로드: ollama pull qwen2.5-coder:3b
+4. .env 설정 확인:
+   - NEO4J_URI=bolt://localhost:7687
+   - NEO4J_PASSWORD=password
+   - PRIVACY_MODE=true
+
+Streamlit UI에서 "Privacy Mode" 체크박스를 활성화했는지 확인하세요.
+"""
+                raise RuntimeError(error_msg)
+        
+        # Privacy Mode is mandatory - all queries handled above
+        raise RuntimeError("Query should have been handled by Privacy Analyst Agent")
         
         # 그래프 파일 확인
         graphml_path = os.path.join(self.working_dir, "graph_chunk_entity_relation.graphml")
@@ -796,3 +836,6 @@ class HybridGraphRAGEngine:
             import traceback
             traceback.print_exc()
 
+
+# Backward compatibility alias
+HybridGraphRAGEngine = PrivacyGraphRAGEngine

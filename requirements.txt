@@ -4,19 +4,20 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 
-# GraphRAG
-nano-graphrag>=0.0.8.2
+# Privacy Mode Components (직접 구현으로 대체)
+# nano-graphrag - REMOVED (직접 구현으로 대체)
+# gensim - REMOVED (nano-graphrag 의존성)
+# graspologic - REMOVED (nano-graphrag 의존성)
 
 # Database
 neo4j>=5.14.0
 
-# Graph Processing
-networkx>=3.2.0
-graspologic>=3.0.0
+# Graph Processing (minimal)
+networkx>=3.2.0  # For legacy graph file reading only
 
 # LLM APIs
 openai>=1.3.0
-ollama>=0.0.1
+ollama>=0.1.0  # Privacy Mode 필수
 
 # PDF Processing
 pymupdf>=1.23.0
@@ -30,5 +31,12 @@ requests>=2.31.0
 # Utilities
 python-dateutil>=2.8.0
 psutil>=5.9.0
+
+# Privacy Mode Dependencies (8GB RAM optimized)
+chardet>=5.0.0  # Encoding detection
+ijson>=3.2.0  # Streaming JSON parser
+langchain>=0.1.0  # Agent framework
+langchain-community>=0.1.0  # Community integrations
+
 # MCP Integration
 mcp>=0.9.0

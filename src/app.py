@@ -15,7 +15,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # engine 모듈에서 HybridGraphRAGEngine을 가져와요!
 from engine import HybridGraphRAGEngine
-from config import print_config, validate_config, ROUTER_MODEL, ROUTER_TEMPERATURE, WEB_SEARCH_MAX_RESULTS, OPENAI_API_KEY, OPENAI_BASE_URL
+from config import (
+    print_config,
+    validate_config,
+    validate_privacy_mode,
+    ROUTER_MODEL,
+    ROUTER_TEMPERATURE,
+    WEB_SEARCH_MAX_RESULTS,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    PRIVACY_MODE,
+    NEO4J_URI,
+    NEO4J_USERNAME,
+    NEO4J_PASSWORD
+)
 from openai import AsyncOpenAI
 from utils import get_executive_report_prompt, get_web_search_report_prompt
 
@@ -41,11 +54,54 @@ async def lifespan(app: FastAPI):
     # validate_config()는 "설정이 올바른지 확인하는" 함수예요!
     validate_config()
     
+    # Privacy Mode 검증 및 진단
+    print("\n🔍 Privacy Mode 진단 시작...")
+    privacy_validation = validate_privacy_mode()
+    
+    if not privacy_validation["valid"]:
+        print("⚠️  Privacy Mode 검증 실패:")
+        for error in privacy_validation["errors"]:
+            print(f"   ❌ {error}")
+        print("\n💡 시스템이 degraded mode로 시작됩니다.")
+        print("   일부 기능이 제한될 수 있습니다.\n")
+    
+    if privacy_validation["warnings"]:
+        print("⚠️  경고:")
+        for warning in privacy_validation["warnings"]:
+            print(f"   ⚠️  {warning}")
+    
+    # Neo4j ping 테스트
+    if NEO4J_URI and NEO4J_PASSWORD:
+        print("\n🔍 Neo4j 연결 테스트 중...")
+        try:
+            from db.neo4j_client import Neo4jClient
+            neo4j_client = Neo4jClient(NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
+            ping_result = neo4j_client.ping()
+            
+            if ping_result["status"] == "ok":
+                print(f"✅ Neo4j 연결 성공: {NEO4J_URI}")
+                if "neo4j_version" in ping_result["details"]:
+                    print(f"   버전: {ping_result['details']['neo4j_version']}")
+            else:
+                print(f"❌ Neo4j 연결 실패: {ping_result['message']}")
+                print(f"   {ping_result['details'].get('suggestion', '')}")
+                print("   쿼리 기능이 제한됩니다.\n")
+            
+            neo4j_client.close()
+        except Exception as e:
+            print(f"❌ Neo4j 진단 실패: {e}")
+            print("   쿼리 기능이 제한됩니다.\n")
+    
     # HybridGraphRAGEngine을 초기화하는 거예요!
-    # 마치 "GraphRAG 엔진을 준비하는" 것처럼!
-    print("🚀 HybridGraphRAGEngine 초기화 중...")
-    engine = HybridGraphRAGEngine()
-    print("✅ HybridGraphRAGEngine 준비 완료!")
+    # Privacy Mode 전용으로 동작합니다.
+    print("🚀 PrivacyGraphRAGEngine 초기화 중...")
+    try:
+        engine = HybridGraphRAGEngine()
+        print("✅ PrivacyGraphRAGEngine 준비 완료!")
+    except Exception as e:
+        print(f"❌ Engine 초기화 실패: {e}")
+        print("   degraded mode로 계속 진행합니다...")
+        engine = None
     
     # MCP Manager 초기화 (옵션)
     try:

@@ -420,4 +420,131 @@ class Neo4jRetriever:
 
         # 상위 N개만 반환
         return [s.__dict__ for s in sources[:top_sources]]
+    
+    def two_hop_traversal(
+        self,
+        start_entity_names: List[str],
+        limit: int = 100
+    ) -> Neo4jQueryResult:
+        """
+        2-hop traversal for Privacy Mode
+        Find hidden connections through intermediate nodes
+        
+        Args:
+            start_entity_names: List of entity names to start from
+            limit: Maximum number of paths to return
+            
+        Returns:
+            Neo4jQueryResult with 2-hop paths
+        """
+        query = """
+        MATCH path = (start)-[r1]->(mid)-[r2]->(end)
+        WHERE start.name IN $names
+        RETURN 
+            start.name AS start_name,
+            labels(start)[0] AS start_type,
+            type(r1) AS rel1_type,
+            mid.name AS mid_name,
+            labels(mid)[0] AS mid_type,
+            type(r2) AS rel2_type,
+            end.name AS end_name,
+            labels(end)[0] AS end_type,
+            start, mid, end, r1, r2
+        LIMIT $limit
+        """
+        
+        return self.executor.execute_query(
+            query,
+            parameters={"names": start_entity_names, "limit": limit},
+            limit=limit
+        )
+    
+    def supply_chain_traversal(
+        self,
+        company_name: str,
+        max_depth: int = 2,
+        limit: int = 50
+    ) -> Neo4jQueryResult:
+        """
+        Traverse supply chain relationships
+        
+        Args:
+            company_name: Company name to analyze
+            max_depth: Maximum relationship depth
+            limit: Maximum results
+            
+        Returns:
+            Supply chain graph
+        """
+        depth_range = f"1..{max_depth}"
+        
+        query = f"""
+        MATCH path = (company {{name: $company_name}})-[:SUPPLIES|PURCHASES*{depth_range}]-(supplier)
+        OPTIONAL MATCH (supplier)-[:HAS_DEBT|HAS_RISK]-(risk)
+        RETURN 
+            company.name AS company_name,
+            supplier.name AS supplier_name,
+            labels(supplier)[0] AS supplier_type,
+            COLLECT(DISTINCT risk.name) AS risks,
+            length(path) AS distance
+        ORDER BY distance
+        LIMIT $limit
+        """
+        
+        return self.executor.execute_query(
+            query,
+            parameters={"company_name": company_name, "limit": limit},
+            limit=limit
+        )
+    
+    def talent_flow_traversal(
+        self,
+        company_name: str,
+        limit: int = 50
+    ) -> Dict[str, List[Dict]]:
+        """
+        Analyze talent flow (incoming/outgoing employees)
+        
+        Args:
+            company_name: Company name to analyze
+            limit: Maximum results per direction
+            
+        Returns:
+            Dict with 'inflow' and 'outflow' lists
+        """
+        # Outflow: company lost employees to competitors
+        outflow_query = """
+        MATCH (company {name: $company_name})-[:LOST_EMPLOYEE]->(person)-[:JOINED]->(competitor)
+        RETURN 
+            person.name AS person_name,
+            competitor.name AS competitor_name,
+            labels(competitor)[0] AS competitor_type
+        LIMIT $limit
+        """
+        
+        # Inflow: company gained employees from competitors
+        inflow_query = """
+        MATCH (competitor)-[:LOST_EMPLOYEE]->(person)-[:JOINED]->(company {name: $company_name})
+        RETURN 
+            person.name AS person_name,
+            competitor.name AS competitor_name,
+            labels(competitor)[0] AS competitor_type
+        LIMIT $limit
+        """
+        
+        outflow_result = self.executor.execute_query(
+            outflow_query,
+            parameters={"company_name": company_name, "limit": limit}
+        )
+        
+        inflow_result = self.executor.execute_query(
+            inflow_query,
+            parameters={"company_name": company_name, "limit": limit}
+        )
+        
+        return {
+            "outflow": outflow_result.records if outflow_result else [],
+            "inflow": inflow_result.records if inflow_result else [],
+            "net_flow": len(inflow_result.records) - len(outflow_result.records) if inflow_result and outflow_result else 0
+        }
 

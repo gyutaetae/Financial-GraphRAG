@@ -662,14 +662,26 @@ with tab1:
     
     # Advanced Settings Expander
     with st.expander("Advanced Settings", expanded=False):
-        # LLM Mode Selection
-        llm_mode = st.radio(
-            "LLM Mode",
-            ["API (OpenAI)", "LOCAL (qwen2.5-coder-3B)"],
-            index=0,
-            help="API: Use OpenAI GPT-4o-mini (faster, more accurate) | LOCAL: Use Ollama Qwen2.5-Coder-3B (private, offline)",
-            horizontal=True
+        # Privacy Mode Toggle
+        privacy_mode = st.checkbox(
+            "Privacy Mode (8GB RAM Optimized)",
+            value=st.session_state.get("privacy_mode", False),
+            help="Enable offline-first, memory-efficient analysis with Ollama. Perfect for sensitive data."
         )
+        st.session_state["privacy_mode"] = privacy_mode
+        
+        if privacy_mode:
+            st.success("Privacy Mode: All processing happens locally with optimized memory usage")
+            llm_mode = "LOCAL (qwen2.5-coder-3B)"  # Force LOCAL mode
+        else:
+            # LLM Mode Selection
+            llm_mode = st.radio(
+                "LLM Mode",
+                ["API (OpenAI)", "LOCAL (qwen2.5-coder-3B)"],
+                index=0,
+                help="API: Use OpenAI GPT-4o-mini (faster, more accurate) | LOCAL: Use Ollama Qwen2.5-Coder-3B (private, offline)",
+                horizontal=True
+            )
         
         if llm_mode == "API (OpenAI)":
             st.info("🌐 API Mode: Using OpenAI GPT-4o-mini for high-quality responses")
@@ -1012,14 +1024,121 @@ with tab1:
 with tab2:
     st.markdown("### Data Ingestion")
     
-    input_method = st.radio(
-        "Select input method",
-        options=["PDF Upload", "URL Crawling"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
+    # Check if Privacy Mode is enabled
+    privacy_mode_active = st.session_state.get("privacy_mode", False)
     
-    if input_method == "PDF Upload":
+    if privacy_mode_active:
+        input_method = st.radio(
+            "Select input method",
+            options=["Privacy Upload (JSON/CSV/TXT)", "PDF Upload", "URL Crawling"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+    else:
+        input_method = st.radio(
+            "Select input method",
+            options=["PDF Upload", "URL Crawling"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+    
+    if input_method == "Privacy Upload (JSON/CSV/TXT)":
+        st.info("Privacy Mode: Upload company data files (JSON, CSV, TXT) for local processing")
+        
+        uploaded_file = st.file_uploader(
+            "Upload Company Data",
+            type=["json", "csv", "txt", "tsv"],
+            help="Upload structured company data for privacy-first analysis"
+        )
+        
+        if uploaded_file:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info(f"{uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
+            with col2:
+                if st.button("Process File", type="primary", use_container_width=True):
+                    with st.spinner("Processing with Privacy Mode..."):
+                        try:
+                            # Import Privacy components
+                            import tempfile
+                            import asyncio
+                            from engine.privacy_ingestor import PrivacyIngestor
+                            from engine.privacy_graph_builder import PrivacyGraphBuilder
+                            from db.neo4j_db import Neo4jDatabase
+                            
+                            # Save uploaded file temporarily
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_file.name) as tmp_file:
+                                tmp_file.write(uploaded_file.getvalue())
+                                tmp_file_path = tmp_file.name
+                            
+                            # Initialize Neo4j if configured
+                            neo4j_db = None
+                            if NEO4J_URI and NEO4J_PASSWORD:
+                                try:
+                                    neo4j_db = Neo4jDatabase(
+                                        uri=NEO4J_URI,
+                                        username=NEO4J_USER,
+                                        password=NEO4J_PASSWORD
+                                    )
+                                except Exception as e:
+                                    st.warning(f"Neo4j connection failed: {e}. Continuing without graph storage.")
+                            
+                            # Initialize components
+                            ingestor = PrivacyIngestor()
+                            builder = PrivacyGraphBuilder(neo4j_db=neo4j_db)
+                            
+                            # Create progress indicators
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            # Process file
+                            status_text.text("Reading file...")
+                            chunks = list(ingestor.ingest_file(tmp_file_path))
+                            total_chunks = len(chunks)
+                            
+                            status_text.text(f"Processing {total_chunks} chunks...")
+                            
+                            # Build graph asynchronously
+                            async def build_graph():
+                                stats = {"processed": 0}
+                                
+                                for i, chunk in enumerate(chunks):
+                                    await builder.process_chunk(chunk)
+                                    stats["processed"] = i + 1
+                                    progress_bar.progress((i + 1) / total_chunks)
+                                    status_text.text(f"Processed {i + 1}/{total_chunks} chunks")
+                                
+                                return builder.stats
+                            
+                            # Run async function
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            stats = loop.run_until_complete(build_graph())
+                            loop.close()
+                            
+                            # Show results
+                            progress_bar.progress(1.0)
+                            status_text.text("Complete!")
+                            
+                            st.success("File processed successfully!")
+                            st.json({
+                                "chunks_processed": stats["chunks_processed"],
+                                "entities_extracted": stats["entities_extracted"],
+                                "relationships_extracted": stats["relationships_extracted"],
+                                "queries_executed": stats["queries_executed"],
+                                "errors": stats["errors"]
+                            })
+                            
+                            # Cleanup
+                            import os
+                            os.unlink(tmp_file_path)
+                            
+                        except Exception as e:
+                            st.error(f"Processing error: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc())
+    
+    elif input_method == "PDF Upload":
         uploaded_file = st.file_uploader(
             "Upload PDF document",
             type=["pdf"],
