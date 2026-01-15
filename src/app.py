@@ -74,20 +74,13 @@ async def lifespan(app: FastAPI):
     if NEO4J_URI and NEO4J_PASSWORD:
         print("\n🔍 Neo4j 연결 테스트 중...")
         try:
-            from db.neo4j_client import Neo4jClient
-            neo4j_client = Neo4jClient(NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
-            ping_result = neo4j_client.ping()
+            from db.neo4j_db import Neo4jDatabase
+            neo4j_db = Neo4jDatabase(NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
+            # Test connection
+            neo4j_db.execute_query("RETURN 1")
+            print(f"✅ Neo4j 연결 성공: {NEO4J_URI}")
+            neo4j_db.close()
             
-            if ping_result["status"] == "ok":
-                print(f"✅ Neo4j 연결 성공: {NEO4J_URI}")
-                if "neo4j_version" in ping_result["details"]:
-                    print(f"   버전: {ping_result['details']['neo4j_version']}")
-            else:
-                print(f"❌ Neo4j 연결 실패: {ping_result['message']}")
-                print(f"   {ping_result['details'].get('suggestion', '')}")
-                print("   쿼리 기능이 제한됩니다.\n")
-            
-            neo4j_client.close()
         except Exception as e:
             print(f"❌ Neo4j 진단 실패: {e}")
             print("   쿼리 기능이 제한됩니다.\n")

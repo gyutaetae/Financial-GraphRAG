@@ -28,7 +28,7 @@ from config import (
 # Import new modular components
 from engine.extractor import KnowledgeExtractor
 from engine.translator import CypherTranslator
-from db.neo4j_client import Neo4jClient
+from db.neo4j_db import Neo4jDatabase
 from engine.pdf_parallel_processor import PDFParallelProcessor
 
 try:
@@ -61,15 +61,15 @@ class PrivacyGraphBuilder:
             enable_deduplication=True
         )
         
-        # Use Neo4jClient instead of legacy neo4j_db
+        # Use Neo4jDatabase for all database operations
         if NEO4J_URI and NEO4J_PASSWORD:
-            self.neo4j_client = Neo4jClient(
+            self.neo4j_db = Neo4jDatabase(
                 uri=NEO4J_URI,
-                user=NEO4J_USERNAME,  # Neo4jClient uses 'user', not 'username'
+                username=NEO4J_USERNAME,
                 password=NEO4J_PASSWORD
             )
         else:
-            self.neo4j_client = None
+            self.neo4j_db = None
             print("⚠️  Neo4j not configured. Queries will not be executed.")
         
         self.batch_size = PRIVACY_BATCH_SIZE
@@ -155,7 +155,7 @@ class PrivacyGraphBuilder:
     
     async def execute_queries(self, queries: List[str]) -> int:
         """
-        Execute Cypher queries using Neo4jClient
+        Execute Cypher queries using Neo4jDatabase
         
         Args:
             queries: List of Cypher query strings
@@ -163,27 +163,30 @@ class PrivacyGraphBuilder:
         Returns:
             Number of successfully executed queries
         """
-        if not self.neo4j_client:
+        if not self.neo4j_db:
             print("⚠️  Neo4j not configured. Skipping query execution.")
             return 0
         
-        # Use Neo4jClient's batch execution
-        result = await self.neo4j_client.execute_batch(
-            queries,
-            batch_size=self.batch_size,
-            delay=0.1
-        )
+        successful = 0
+        failed = 0
+        
+        for query in queries:
+            try:
+                self.neo4j_db.execute_query(query)
+                successful += 1
+            except Exception as e:
+                failed += 1
+                if failed <= 3:  # Show first 3 errors
+                    print(f"⚠️  Query failed: {str(e)[:100]}")
         
         # Update statistics
-        self.stats["queries_executed"] += result["successful"]
-        self.stats["errors"] += result["failed"]
+        self.stats["queries_executed"] += successful
+        self.stats["errors"] += failed
         
-        if result["failed"] > 0:
-            print(f"⚠️  {result['failed']} queries failed")
-            for error in result["errors"][:3]:  # Show first 3 errors
-                print(f"   Error: {error['error']}")
+        if failed > 0:
+            print(f"⚠️  {failed}/{len(queries)} queries failed")
         
-        return result["successful"]
+        return successful
     
     async def process_chunk(self, chunk: Dict[str, Any]) -> bool:
         """
