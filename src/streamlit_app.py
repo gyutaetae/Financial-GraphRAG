@@ -1519,7 +1519,7 @@ with tab4:
         if viz_mode == "Company Focus":
             company = st.selectbox(
                 "Select Company",
-                ["Nvidia", "TSMC", "AMD", "Intel", "Samsung Electronics"]
+                ["Nvidia", "TSMC", "AMD", "FPT Semiconductor", "Samsung Electronics"]
             )
         
         if viz_mode == "Custom Query":

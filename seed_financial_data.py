@@ -22,6 +22,7 @@ def main():
         "MERGE (c:Country {name: 'United States'}) SET c.region = 'North America'",
         "MERGE (c:Country {name: 'China'}) SET c.region = 'Asia'",
         "MERGE (c:Country {name: 'Taiwan'}) SET c.region = 'Asia'",
+        "MERGE (c:Country {name: 'Vietnam'}) SET c.region = 'Southeast Asia'",
         
         # Industries
         "MERGE (i:Industry {name: 'Semiconductor'}) SET i.sector = 'Technology'",
@@ -33,10 +34,10 @@ def main():
         "MERGE (m:MacroIndicator {name: 'Global Semiconductor Shortage'}) SET m.type = 'supply_chain'",
         
         # Companies
-        "MERGE (c:Company {name: 'Nvidia'}) SET c.market_cap = 1200, c.revenue = 60.9",
-        "MERGE (c:Company {name: 'TSMC'}) SET c.market_cap = 500, c.revenue = 69.3",
-        "MERGE (c:Company {name: 'AMD'}) SET c.market_cap = 240, c.revenue = 22.7",
-        "MERGE (c:Company {name: 'Intel'}) SET c.market_cap = 200, c.revenue = 54.2",
+        "MERGE (c:Company {name: 'Nvidia'}) SET c.market_cap = 1200, c.revenue = 60.9, c.country = 'United States'",
+        "MERGE (c:Company {name: 'TSMC'}) SET c.market_cap = 500, c.revenue = 69.3, c.country = 'Taiwan'",
+        "MERGE (c:Company {name: 'AMD'}) SET c.market_cap = 240, c.revenue = 22.7, c.country = 'United States'",
+        "MERGE (c:Company {name: 'FPT Semiconductor'}) SET c.market_cap = 15, c.revenue = 4.5, c.country = 'Vietnam', c.industry = 'Semiconductor Manufacturing'",
         
         # Company → Industry
         "MATCH (c:Company {name: 'Nvidia'}), (i:Industry {name: 'Semiconductor'}) MERGE (c)-[:OPERATES_IN]->(i)",
@@ -46,6 +47,8 @@ def main():
         # Company → Country
         "MATCH (c:Company {name: 'Nvidia'}), (co:Country {name: 'United States'}) MERGE (c)-[:LOCATED_IN]->(co)",
         "MATCH (c:Company {name: 'TSMC'}), (co:Country {name: 'Taiwan'}) MERGE (c)-[:LOCATED_IN]->(co)",
+        "MATCH (c:Company {name: 'AMD'}), (co:Country {name: 'United States'}) MERGE (c)-[:LOCATED_IN]->(co)",
+        "MATCH (c:Company {name: 'FPT Semiconductor'}), (co:Country {name: 'Vietnam'}) MERGE (c)-[:LOCATED_IN]->(co)",
         
         # Dependencies
         "MATCH (n:Company {name: 'Nvidia'}), (t:Company {name: 'TSMC'}) MERGE (n)-[:DEPENDS_ON {criticality: 'high'}]->(t)",
@@ -53,7 +56,11 @@ def main():
         
         # Competition
         "MATCH (n:Company {name: 'Nvidia'}), (a:Company {name: 'AMD'}) MERGE (n)-[:COMPETES_WITH {segment: 'GPU'}]->(a)",
-        "MATCH (n:Company {name: 'Nvidia'}), (i:Company {name: 'Intel'}) MERGE (n)-[:COMPETES_WITH {segment: 'AI'}]->(i)",
+        "MATCH (a:Company {name: 'AMD'}), (n:Company {name: 'Nvidia'}) MERGE (a)-[:COMPETES_WITH {segment: 'GPU'}]->(n)",
+        
+        # Supply Chain - FPT Semiconductor supplies to major companies
+        "MATCH (f:Company {name: 'FPT Semiconductor'}), (t:Company {name: 'TSMC'}) MERGE (f)-[:SUPPLIES {component: 'packaging'}]->(t)",
+        "MATCH (f:Company {name: 'FPT Semiconductor'}), (n:Company {name: 'Nvidia'}) MERGE (f)-[:PARTNERS_WITH {type: 'testing'}]->(n)",
         
         # Macro → Industry
         "MATCH (m:MacroIndicator {name: 'Taiwan Strait Tension'}), (i:Industry {name: 'Semiconductor'}) MERGE (m)-[:IMPACTS {impact: 'negative', severity: 0.9}]->(i)",
